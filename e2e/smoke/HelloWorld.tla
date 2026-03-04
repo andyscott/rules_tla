@@ -1,10 +1,8 @@
----- MODULE hello_world ----
-
-\* TLA+ code
+---- MODULE HelloWorld ----
 
 EXTENDS TLC
 
-(* --algorithm hello_world
+(* --algorithm HelloWorld
 variable s \in {"Hello", "World!"};
 begin
   A:

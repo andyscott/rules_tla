@@ -1,0 +1,11 @@
+load("@rules_java//java:defs.bzl", "java_test")
+
+java_test(
+    name = "repo_layout_test",
+    srcs = ["RepoLayoutTest.java"],
+    data = [
+        "//:.bazelversion",
+        "//:MODULE.bazel",
+    ],
+    main_class = "rules_tla.RepoLayoutTest",
+)

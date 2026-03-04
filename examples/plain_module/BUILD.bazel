@@ -1,0 +1,6 @@
+load("//tla:tla.bzl", "tla_library")
+
+tla_library(
+    name = "plain_module",
+    srcs = ["plain_module.tla"],
+)

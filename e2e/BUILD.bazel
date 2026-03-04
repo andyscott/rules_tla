@@ -1,0 +1,6 @@
+test_suite(
+    name = "e2e_tests",
+    tests = [
+        "//smoke:smoke_test",
+    ],
+)

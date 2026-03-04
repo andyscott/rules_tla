@@ -1,0 +1,13 @@
+load("//tla:tla.bzl", "pluscal_library", "tlc_test")
+
+pluscal_library(
+    name = "hello_world",
+    srcs = ["hello_world.tla"],
+)
+
+tlc_test(
+    name = "model_check",
+    cfg = "demo.cfg",
+    main_module = "hello_world",
+    spec = ":hello_world",
+)

@@ -1,0 +1,24 @@
+module(
+    name = "rules_tla",
+)
+
+bazel_dep(name = "bazel_skylib", version = "1.8.2")
+
+bazel_dep(name = "buildifier_prebuilt", version = "8.2.1", dev_dependency = True)
+
+bazel_dep(name = "rules_java", version = "9.0.3")
+
+tla = use_extension("//tla:extensions.bzl", "tla")
+tla.toolchain(
+    sha256 = "936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88",
+    version = "1.7.4",
+)
+tla.apalache(
+    sha256 = "c539711703fd2550d8e065e486f0cbc8286846e14c16e92ef93ba3ece0149ef3",
+    version = "0.52.1",
+)
+use_repo(tla, "apalache", "tla2tools")
+
+register_toolchains("//tla:default_toolchain")
+
+register_toolchains("//tla:default_apalache_toolchain")

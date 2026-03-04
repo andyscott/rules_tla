@@ -1,0 +1,6 @@
+exports_files([
+    ".bazelversion",
+    ".pre-commit-config.yaml",
+    "MODULE.bazel",
+    "README.md",
+])

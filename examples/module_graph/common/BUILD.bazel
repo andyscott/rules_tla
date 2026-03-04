@@ -1,0 +1,7 @@
+load("//tla:tla.bzl", "tla_library")
+
+tla_library(
+    name = "helper",
+    srcs = ["CounterHelper.tla"],
+    visibility = ["//visibility:public"],
+)

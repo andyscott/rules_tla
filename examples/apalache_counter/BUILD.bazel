@@ -1,0 +1,31 @@
+load("//tla:tla.bzl", "apalache_check", "apalache_simulate", "tla_library")
+
+tla_library(
+    name = "counter",
+    srcs = ["ApalacheCounter.tla"],
+)
+
+apalache_check(
+    name = "bounded_check",
+    invs = ["Inv"],
+    length = 5,
+    main_module = "ApalacheCounter",
+    spec = ":counter",
+)
+
+apalache_check(
+    name = "temporal_check",
+    length = 5,
+    main_module = "ApalacheCounter",
+    spec = ":counter",
+    temporals = ["AlwaysSafe"],
+)
+
+apalache_simulate(
+    name = "simulation",
+    length = 5,
+    main_module = "ApalacheCounter",
+    max_runs = 2,
+    spec = ":counter",
+    tags = ["manual"],
+)

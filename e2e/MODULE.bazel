@@ -1,0 +1,11 @@
+module(
+    name = "rules_tla_e2e",
+)
+
+bazel_dep(name = "rules_tla", version = "0.0.0")
+bazel_dep(name = "bazel_skylib", version = "1.8.2")
+
+local_path_override(
+    module_name = "rules_tla",
+    path = "..",
+)
