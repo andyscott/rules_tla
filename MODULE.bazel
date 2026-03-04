@@ -12,3 +12,5 @@ tla.toolchain(
     version = "1.7.4",
 )
 use_repo(tla, "protobuf_java", "tla2tools")
+
+register_toolchains("//tla:default_toolchain")

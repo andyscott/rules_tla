@@ -39,12 +39,12 @@ def _resolve_execution_reqs(ctx, base_exec_reqs):
     return exec_reqs
 
 def _tla(ctx):
-    worker = ctx.attr._worker
-    _, _, input_manifests = ctx.resolve_command(tools = [worker])
+    toolchain = ctx.toolchains["//tla:toolchain_type"]
     return struct(
         ctx = ctx,
-        worker = worker,
-        input_manifests = input_manifests,
+        worker_default_runfiles = toolchain.worker_default_runfiles,
+        worker_executable = toolchain.worker_executable,
+        worker_files_to_run = toolchain.worker_files_to_run,
     )
 
 def _stage_input_file(ctx, file, stem):
@@ -79,8 +79,8 @@ def _action_tla2sany_sany(ctx, tla, direct_inputs, all_inputs):
         mnemonic = "Tla2Tools",
         inputs = all_inputs,
         outputs = outputs,
-        executable = tla.worker.files_to_run.executable,
-        input_manifests = tla.input_manifests,
+        executable = tla.worker_executable,
+        tools = [tla.worker_files_to_run],
         execution_requirements = _resolve_execution_reqs(
             ctx,
             {"supports-workers": "1"},
@@ -176,8 +176,8 @@ def _action_pcal_trans(ctx, tla, file):
         mnemonic = "Tla2Tools",
         inputs = [file],
         outputs = outputs,
-        executable = tla.worker.files_to_run.executable,
-        input_manifests = tla.input_manifests,
+        executable = tla.worker_executable,
+        tools = [tla.worker_files_to_run],
         execution_requirements = _resolve_execution_reqs(
             ctx,
             {"supports-workers": "1"},
@@ -225,12 +225,8 @@ tla_library = rule(
     attrs = {
         "deps": attr.label_list(providers = [TlaInfo]),
         "srcs": attr.label_list(allow_files = [".tla"]),
-        "_worker": attr.label(
-            cfg = "exec",
-            default = "//src/main/java/io/higherkindness/rules_tla:worker",
-            executable = True,
-        ),
     },
+    toolchains = ["//tla:toolchain_type"],
 )
 
 pluscal_library = rule(
@@ -238,12 +234,8 @@ pluscal_library = rule(
     attrs = {
         "deps": attr.label_list(providers = [TlaInfo]),
         "srcs": attr.label_list(allow_files = [".tla"]),
-        "_worker": attr.label(
-            cfg = "exec",
-            default = "//src/main/java/io/higherkindness/rules_tla:worker",
-            executable = True,
-        ),
     },
+    toolchains = ["//tla:toolchain_type"],
 )
 
 def _action_tlc2_TLC(ctx, tla, main_file, module_files, cfg, max_depth, max_traces):
@@ -270,8 +262,8 @@ def _action_tlc2_TLC(ctx, tla, main_file, module_files, cfg, max_depth, max_trac
         mnemonic = "Tla2Tools",
         inputs = module_files + [staged_cfg],
         outputs = outputs,
-        executable = tla.worker.files_to_run.executable,
-        input_manifests = tla.input_manifests,
+        executable = tla.worker_executable,
+        tools = [tla.worker_files_to_run],
         execution_requirements = _resolve_execution_reqs(
             ctx,
             {"supports-workers": "1"},
@@ -312,12 +304,13 @@ def _tla_simulation_implementation(ctx):
     ]
 
 def _tlc_test_implementation(ctx):
+    tla = _tla(ctx)
     module_files = ctx.attr.spec[TlaInfo].module_files.to_list()
     spec_file = _resolve_main_module_file(ctx.attr.spec[TlaInfo], ctx.attr.main_module, "tlc_test")
     executable = ctx.actions.declare_file(ctx.label.name)
     module_manifest = ctx.actions.declare_file("{}.modules".format(ctx.label.name))
 
-    worker_path = _runfiles_path(ctx.executable._worker)
+    worker_path = _runfiles_path(tla.worker_executable)
     spec_path = _runfiles_path(spec_file)
     cfg_path = _runfiles_path(ctx.file.cfg)
     module_manifest_path = _runfiles_path(module_manifest)
@@ -373,7 +366,7 @@ fi
             module_manifest,
         ],
         transitive_files = depset(module_files),
-    ).merge(ctx.attr._worker[DefaultInfo].default_runfiles).merge(ctx.attr._runfiles[DefaultInfo].default_runfiles)
+    ).merge(tla.worker_default_runfiles).merge(ctx.attr._runfiles[DefaultInfo].default_runfiles)
 
     return [
         DefaultInfo(
@@ -390,12 +383,8 @@ tla_simulation = rule(
         "max_traces": attr.int(default = 1),
         "spec": attr.label(providers = [TlaInfo]),
         "cfg": attr.label(allow_single_file = [".cfg"]),
-        "_worker": attr.label(
-            cfg = "exec",
-            default = "//src/main/java/io/higherkindness/rules_tla:worker",
-            executable = True,
-        ),
     },
+    toolchains = ["//tla:toolchain_type"],
 )
 
 tlc_test = rule(
@@ -405,13 +394,9 @@ tlc_test = rule(
         "main_module": attr.string(mandatory = True),
         "spec": attr.label(providers = [TlaInfo]),
         "cfg": attr.label(allow_single_file = [".cfg"]),
-        "_worker": attr.label(
-            cfg = "target",
-            default = "//src/main/java/io/higherkindness/rules_tla:worker",
-            executable = True,
-        ),
         "_runfiles": attr.label(
             default = "@bazel_tools//tools/bash/runfiles",
         ),
     },
+    toolchains = ["//tla:toolchain_type"],
 )
