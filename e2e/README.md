@@ -12,6 +12,8 @@ bazel test //...
 The cases currently cover:
 
 - happy-path Bzlmod consumption of `tla_library`, `pluscal_library`, and `tlc_test`
+- happy-path Bzlmod consumption of `apalache_check`
+- happy-path Bzlmod consumption of `apalache_simulate`
 
 The negative PlusCal case is checked in alongside the smoke suite and is meant to be
 invoked explicitly:

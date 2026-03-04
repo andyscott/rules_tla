@@ -1,5 +1,5 @@
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
-load("@io_higherkindness_rules_tla//tla:tla.bzl", "pluscal_library", "tla_library", "tlc_test")
+load("@io_higherkindness_rules_tla//tla:tla.bzl", "apalache_check", "apalache_simulate", "pluscal_library", "tla_library", "tlc_test")
 
 tla_library(
     name = "helper",
@@ -17,6 +17,11 @@ pluscal_library(
     srcs = ["HelloWorld.tla"],
 )
 
+tla_library(
+    name = "apalache_counter",
+    srcs = ["ApalacheCounter.tla"],
+)
+
 tlc_test(
     name = "counter_model_check",
     cfg = "counter.cfg",
@@ -31,9 +36,34 @@ tlc_test(
     spec = ":hello_world",
 )
 
+apalache_check(
+    name = "apalache_bounded_check",
+    invs = ["Inv"],
+    length = 5,
+    main_module = "ApalacheCounter",
+    spec = ":apalache_counter",
+)
+
+apalache_check(
+    name = "apalache_temporal_check",
+    length = 5,
+    main_module = "ApalacheCounter",
+    spec = ":apalache_counter",
+    temporals = ["AlwaysSafe"],
+)
+
+apalache_simulate(
+    name = "apalache_simulation",
+    length = 5,
+    main_module = "ApalacheCounter",
+    max_runs = 2,
+    spec = ":apalache_counter",
+)
+
 build_test(
     name = "build_smoke",
     targets = [
+        ":apalache_counter",
         ":helper",
         ":counter_spec",
         ":hello_world",
@@ -43,6 +73,9 @@ build_test(
 test_suite(
     name = "smoke_test",
     tests = [
+        ":apalache_bounded_check",
+        ":apalache_simulation",
+        ":apalache_temporal_check",
         ":build_smoke",
         ":counter_model_check",
         ":hello_model_check",

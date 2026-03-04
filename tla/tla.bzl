@@ -30,6 +30,9 @@ fi
 # --- end runfiles.bash initialization ---
 """
 
+def _sh_string_literal(value):
+    return '"{}"'.format(value.replace("\\", "\\\\").replace('"', '\\"'))
+
 def _resolve_execution_reqs(ctx, base_exec_reqs):
     exec_reqs = {}
     for tag in ctx.attr.tags:
@@ -113,8 +116,21 @@ def _runfiles_path(file):
         return short_path[3:]
     return "_main/{}".format(short_path)
 
+def _normalize_runfiles_path(path):
+    if path.startswith("/"):
+        return path
+    if path.startswith("../"):
+        return path[3:]
+    return "_main/{}".format(path)
+
 def _shell_quote(value):
     return "'{}'".format(value.replace("'", "'\"'\"'"))
+
+def _shell_list_arg(flag, values):
+    if not values:
+        return ""
+    return """args+=({flag})
+""".format(flag = _sh_string_literal("{}={}".format(flag, ",".join(values))))
 
 def _ordered_module_files(direct_files, dep_infos):
     ordered_files = []
@@ -375,6 +391,267 @@ fi
         ),
     ]
 
+def _apalache_check_implementation(ctx):
+    apalache = ctx.toolchains["//tla:apalache_toolchain_type"]
+    java_runtime = ctx.toolchains["@bazel_tools//tools/jdk:runtime_toolchain_type"].java_runtime
+    if not ctx.attr.invs and not ctx.attr.temporals:
+        fail("apalache_check requires at least one invariant in invs or temporal property in temporals")
+    if ctx.attr.length < 1:
+        fail("apalache_check length must be at least 1")
+
+    module_files = ctx.attr.spec[TlaInfo].module_files.to_list()
+    spec_file = _resolve_main_module_file(ctx.attr.spec[TlaInfo], ctx.attr.main_module, "apalache_check")
+    executable = ctx.actions.declare_file(ctx.label.name)
+    module_manifest = ctx.actions.declare_file("{}.apalache.modules".format(ctx.label.name))
+
+    ctx.actions.write(
+        output = module_manifest,
+        content = "\n".join([_runfiles_path(file) for file in module_files]) + "\n",
+    )
+
+    cfg_setup = ""
+    cfg_arg = ""
+    if ctx.file.cfg:
+        cfg_setup = """cfg_src=$(rlocation {cfg})
+cp "$cfg_src" "$work_dir/{cfg_basename}"
+""".format(
+            cfg = _shell_quote(_runfiles_path(ctx.file.cfg)),
+            cfg_basename = ctx.file.cfg.basename,
+        )
+        cfg_arg = """args+=(--config={cfg_basename})
+""".format(cfg_basename = ctx.file.cfg.basename)
+
+    cinit_arg = ""
+    if ctx.attr.cinit:
+        cinit_arg = """args+=(--cinit={cinit})
+""".format(cinit = ctx.attr.cinit)
+
+    deadlock_arg = ""
+    if ctx.attr.no_deadlock:
+        deadlock_arg = """args+=(--no-deadlock)
+"""
+
+    property_args = _shell_list_arg("--inv", ctx.attr.invs) + _shell_list_arg("--temporal", ctx.attr.temporals)
+
+    script = """#!/usr/bin/env bash
+{runfiles_init}
+
+resolve_path() {{
+  local candidate="$1"
+  if [[ "$candidate" = /* ]]; then
+    printf '%s\\n' "$candidate"
+  else
+    rlocation "$candidate"
+  fi
+}}
+
+java_bin=$(resolve_path {java_bin})
+apalache_jar=$(resolve_path {apalache_jar})
+modules_manifest=$(resolve_path {modules_manifest})
+tmp_root="${{TEST_TMPDIR:-$PWD}}"
+work_dir="${{tmp_root}}/{name}.apalache"
+log_dir="${{TEST_UNDECLARED_OUTPUTS_DIR:-$work_dir/logs}}"
+log_file="${{log_dir}}/{name}.apalache.log"
+
+rm -rf "$work_dir"
+mkdir -p "$work_dir" "$log_dir"
+
+while IFS= read -r module_path; do
+  [[ -n "$module_path" ]] || continue
+  src=$(resolve_path "$module_path")
+  cp "$src" "$work_dir/$(basename "$src")"
+done < "$modules_manifest"
+
+{cfg_setup}cd "$work_dir"
+
+args=(
+  --out-dir="$work_dir/out"
+  check
+  --init={init}
+  --next={next}
+  --length={length}
+)
+{property_args}{cinit_arg}{cfg_arg}{deadlock_arg}args+=({spec})
+
+if ! "$java_bin" -jar "$apalache_jar" "${{args[@]}}" >"$log_file" 2>&1; then
+  cat >&2 "$log_file"
+  exit 1
+fi
+""".format(
+        apalache_jar = _shell_quote(_runfiles_path(apalache.jar)),
+        cfg_arg = cfg_arg,
+        cfg_setup = cfg_setup,
+        cinit_arg = cinit_arg,
+        deadlock_arg = deadlock_arg,
+        init = ctx.attr.init,
+        java_bin = _shell_quote(_normalize_runfiles_path(java_runtime.java_executable_runfiles_path)),
+        length = ctx.attr.length,
+        modules_manifest = _shell_quote(_runfiles_path(module_manifest)),
+        name = ctx.label.name,
+        next = ctx.attr.next,
+        property_args = property_args,
+        runfiles_init = _RUNFILES_BASH_INIT,
+        spec = _sh_string_literal(spec_file.basename),
+    )
+
+    ctx.actions.write(
+        output = executable,
+        content = script,
+        is_executable = True,
+    )
+
+    runfiles = ctx.runfiles(
+        files = [
+            module_manifest,
+        ] + ([ctx.file.cfg] if ctx.file.cfg else []),
+        transitive_files = depset(
+            transitive = [
+                depset(module_files),
+                apalache.files,
+                java_runtime.files,
+            ],
+        ),
+    ).merge(ctx.attr._runfiles[DefaultInfo].default_runfiles)
+
+    return [
+        DefaultInfo(
+            executable = executable,
+            runfiles = runfiles,
+        ),
+    ]
+
+def _apalache_simulate_implementation(ctx):
+    apalache = ctx.toolchains["//tla:apalache_toolchain_type"]
+    java_runtime = ctx.toolchains["@bazel_tools//tools/jdk:runtime_toolchain_type"].java_runtime
+    if ctx.attr.length < 1:
+        fail("apalache_simulate length must be at least 1")
+    if ctx.attr.max_runs < 1:
+        fail("apalache_simulate max_runs must be at least 1")
+
+    module_files = ctx.attr.spec[TlaInfo].module_files.to_list()
+    spec_file = _resolve_main_module_file(ctx.attr.spec[TlaInfo], ctx.attr.main_module, "apalache_simulate")
+    executable = ctx.actions.declare_file(ctx.label.name)
+    module_manifest = ctx.actions.declare_file("{}.apalache.modules".format(ctx.label.name))
+
+    ctx.actions.write(
+        output = module_manifest,
+        content = "\n".join([_runfiles_path(file) for file in module_files]) + "\n",
+    )
+
+    cfg_setup = ""
+    cfg_arg = ""
+    if ctx.file.cfg:
+        cfg_setup = """cfg_src=$(rlocation {cfg})
+cp "$cfg_src" "$work_dir/{cfg_basename}"
+""".format(
+            cfg_basename = ctx.file.cfg.basename,
+            cfg = _shell_quote(_runfiles_path(ctx.file.cfg)),
+        )
+        cfg_arg = """args+=(--config={cfg_basename})
+""".format(cfg_basename = ctx.file.cfg.basename)
+
+    cinit_arg = ""
+    if ctx.attr.cinit:
+        cinit_arg = """args+=(--cinit={cinit})
+""".format(cinit = ctx.attr.cinit)
+
+    deadlock_arg = ""
+    if ctx.attr.no_deadlock:
+        deadlock_arg = """args+=(--no-deadlock)
+"""
+
+    property_args = _shell_list_arg("--inv", ctx.attr.invs) + _shell_list_arg("--temporal", ctx.attr.temporals)
+
+    script = """#!/usr/bin/env bash
+{runfiles_init}
+
+resolve_path() {{
+  local candidate="$1"
+  if [[ "$candidate" = /* ]]; then
+    printf '%s\\n' "$candidate"
+  else
+    rlocation "$candidate"
+  fi
+}}
+
+java_bin=$(resolve_path {java_bin})
+apalache_jar=$(resolve_path {apalache_jar})
+modules_manifest=$(resolve_path {modules_manifest})
+tmp_root="${{TEST_TMPDIR:-$PWD}}"
+work_dir="${{tmp_root}}/{name}.apalache"
+log_dir="${{TEST_UNDECLARED_OUTPUTS_DIR:-$work_dir/logs}}"
+log_file="${{log_dir}}/{name}.apalache.log"
+out_dir="${{log_dir}}/{name}.out"
+
+rm -rf "$work_dir" "$out_dir"
+mkdir -p "$work_dir" "$log_dir" "$out_dir"
+
+while IFS= read -r module_path; do
+  [[ -n "$module_path" ]] || continue
+  src=$(resolve_path "$module_path")
+  cp "$src" "$work_dir/$(basename "$src")"
+done < "$modules_manifest"
+
+{cfg_setup}cd "$work_dir"
+
+args=(
+  --out-dir="$out_dir"
+  simulate
+  --init={init}
+  --next={next}
+  --length={length}
+  --max-run={max_runs}
+)
+{property_args}{cinit_arg}{cfg_arg}{deadlock_arg}args+=({spec})
+
+if ! "$java_bin" -jar "$apalache_jar" "${{args[@]}}" >"$log_file" 2>&1; then
+  cat >&2 "$log_file"
+  exit 1
+fi
+""".format(
+        apalache_jar = _shell_quote(_runfiles_path(apalache.jar)),
+        cfg_arg = cfg_arg,
+        cfg_setup = cfg_setup,
+        cinit_arg = cinit_arg,
+        deadlock_arg = deadlock_arg,
+        init = ctx.attr.init,
+        java_bin = _shell_quote(_normalize_runfiles_path(java_runtime.java_executable_runfiles_path)),
+        length = ctx.attr.length,
+        max_runs = ctx.attr.max_runs,
+        modules_manifest = _shell_quote(_runfiles_path(module_manifest)),
+        name = ctx.label.name,
+        next = ctx.attr.next,
+        property_args = property_args,
+        runfiles_init = _RUNFILES_BASH_INIT,
+        spec = _sh_string_literal(spec_file.basename),
+    )
+
+    ctx.actions.write(
+        output = executable,
+        content = script,
+        is_executable = True,
+    )
+
+    runfiles = ctx.runfiles(
+        files = [
+            module_manifest,
+        ] + ([ctx.file.cfg] if ctx.file.cfg else []),
+        transitive_files = depset(
+            transitive = [
+                depset(module_files),
+                apalache.files,
+                java_runtime.files,
+            ],
+        ),
+    ).merge(ctx.attr._runfiles[DefaultInfo].default_runfiles)
+
+    return [
+        DefaultInfo(
+            executable = executable,
+            runfiles = runfiles,
+        ),
+    ]
+
 tlc_simulation = rule(
     implementation = _tlc_simulation_implementation,
     attrs = {
@@ -403,3 +680,64 @@ tlc_test = rule(
     },
     toolchains = ["//tla:toolchain_type"],
 )
+
+_apalache_check_test = rule(
+    implementation = _apalache_check_implementation,
+    test = True,
+    attrs = {
+        "cinit": attr.string(),
+        "cfg": attr.label(allow_single_file = [".cfg"]),
+        "init": attr.string(default = "Init"),
+        "invs": attr.string_list(),
+        "length": attr.int(default = 10),
+        "main_module": attr.string(mandatory = True),
+        "next": attr.string(default = "Next"),
+        "no_deadlock": attr.bool(default = False),
+        "spec": attr.label(providers = [TlaInfo]),
+        "temporals": attr.string_list(),
+        "_runfiles": attr.label(
+            default = "@bazel_tools//tools/bash/runfiles",
+        ),
+    },
+    toolchains = [
+        "//tla:apalache_toolchain_type",
+        "@bazel_tools//tools/jdk:runtime_toolchain_type",
+    ],
+)
+
+def apalache_check(name, **kwargs):
+    _apalache_check_test(
+        name = name,
+        **kwargs
+    )
+
+_apalache_simulate_test = rule(
+    implementation = _apalache_simulate_implementation,
+    test = True,
+    attrs = {
+        "cinit": attr.string(),
+        "cfg": attr.label(allow_single_file = [".cfg"]),
+        "init": attr.string(default = "Init"),
+        "invs": attr.string_list(),
+        "length": attr.int(default = 10),
+        "main_module": attr.string(mandatory = True),
+        "max_runs": attr.int(default = 1),
+        "next": attr.string(default = "Next"),
+        "no_deadlock": attr.bool(default = False),
+        "spec": attr.label(providers = [TlaInfo]),
+        "temporals": attr.string_list(),
+        "_runfiles": attr.label(
+            default = "@bazel_tools//tools/bash/runfiles",
+        ),
+    },
+    toolchains = [
+        "//tla:apalache_toolchain_type",
+        "@bazel_tools//tools/jdk:runtime_toolchain_type",
+    ],
+)
+
+def apalache_simulate(name, **kwargs):
+    _apalache_simulate_test(
+        name = name,
+        **kwargs
+    )

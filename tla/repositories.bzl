@@ -28,6 +28,32 @@ tla2tools_repository = repository_rule(
     },
 )
 
+def _apalache_repository_impl(repository_ctx):
+    repository_ctx.download_and_extract(
+        sha256 = repository_ctx.attr.sha256,
+        stripPrefix = "apalache-{}".format(repository_ctx.attr.version),
+        url = "https://github.com/apalache-mc/apalache/releases/download/v{}/apalache-{}.tgz".format(
+            repository_ctx.attr.version,
+            repository_ctx.attr.version,
+        ),
+    )
+
+    repository_ctx.file("BUILD.bazel", """\
+filegroup(
+    name = "apalache_jar",
+    srcs = ["lib/apalache.jar"],
+    visibility = ["//visibility:public"],
+)
+""")
+
+apalache_repository = repository_rule(
+    implementation = _apalache_repository_impl,
+    attrs = {
+        "sha256": attr.string(mandatory = True),
+        "version": attr.string(mandatory = True),
+    },
+)
+
 def _protobuf_java_repository_impl(repository_ctx):
     repository_ctx.download(
         output = "protobuf-java.jar",

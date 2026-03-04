@@ -93,6 +93,67 @@ Behavior:
 - stages the full transitive module graph into TLC
 - fails the Bazel test on TLC errors
 
+### `apalache_check`
+
+Use `apalache_check` for bounded symbolic checking with Apalache.
+
+```starlark
+load("@io_higherkindness_rules_tla//tla:tla.bzl", "apalache_check")
+
+apalache_check(
+    name = "bounded_check",
+    invs = ["Inv"],
+    length = 5,
+    main_module = "Counter",
+    spec = ":spec",
+)
+```
+
+Behavior:
+
+- runs `apalache-mc check`
+- stages the full transitive module graph into an isolated work directory
+- uses Bazel's Java runtime toolchain to invoke the packaged Apalache jar
+- fails the Bazel test on invariant violations or Apalache/tool errors
+
+Notes:
+
+- Apalache is complementary to TLC, not a replacement for it
+- Apalache requires typed specs; variable annotations are often needed
+- `apalache_check` accepts invariants in `invs`, temporal properties in `temporals`, or both
+- bounded checks still require at least one property to check
+- the rule surface supports bounded checks with explicit `length` and optional `cinit` / TLC-style `cfg`
+
+### `apalache_simulate`
+
+Use `apalache_simulate` for manual or exploratory Apalache simulation.
+
+```starlark
+load("@io_higherkindness_rules_tla//tla:tla.bzl", "apalache_simulate")
+
+apalache_simulate(
+    name = "simulation",
+    length = 5,
+    main_module = "Counter",
+    max_runs = 2,
+    spec = ":spec",
+    tags = ["manual"],
+)
+```
+
+Behavior:
+
+- runs `apalache-mc simulate`
+- stages the full transitive module graph into an isolated work directory
+- writes Apalache logs and artifacts into the test's undeclared outputs directory
+- fails the Bazel test on Apalache or spec errors
+
+Notes:
+
+- `apalache_simulate` is for bounded exploration, not merge-blocking correctness checks
+- `max_runs` controls how many simulation runs Apalache produces
+- `invs`, `temporals`, `cinit`, and `cfg` are available when you want to constrain or inspect the run
+
 ### `tlc_simulation`
 
 Use `tlc_simulation` for manual or exploratory TLC simulation.
@@ -156,6 +217,7 @@ The repo includes examples for the supported shapes:
 - `examples/plain_module`: plain TLA module validation
 - `examples/hello_world`: PlusCal translation plus TLC test
 - `examples/module_graph`: cross-package module graph plus TLC test
+- `examples/apalache_counter`: bounded symbolic checking, temporal properties, and simulation with Apalache
 - `examples/simple_bank_transfer`: manual TLC simulation for a PlusCal spec
 
 ## Development
@@ -167,5 +229,8 @@ bazel test ...
 bazel build //examples/plain_module:plain_module
 bazel test //examples/hello_world:model_check
 bazel test //examples/module_graph/spec:model_check
+bazel test //examples/apalache_counter:bounded_check
+bazel test //examples/apalache_counter:temporal_check
+bazel test //examples/apalache_counter:simulation
 cd e2e && bazel test //...
 ```
