@@ -26,10 +26,19 @@ cd "$repo_root"
 
 run_bazel run //.github/workflows:buildifier.check
 run_bazel test ...
+run_bazel test \
+  //examples/plain_module:plain_module \
+  //examples/hello_world:model_check \
+  //examples/module_graph/spec:model_check \
+  --experimental_output_paths=strip
 
 (
   cd e2e
   run_bazel test //...
+  run_bazel test \
+    //smoke:build_smoke \
+    //smoke:hello_model_check \
+    --experimental_output_paths=strip
 
   negative_log="$(mktemp)"
   trap 'rm -f "$negative_log"' EXIT

@@ -7,6 +7,7 @@ Run the external-consumer smoke coverage from this directory:
 
 ```bash
 bazel test //...
+bazel test //... --experimental_output_paths=strip
 ```
 
 The cases currently cover:

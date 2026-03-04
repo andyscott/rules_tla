@@ -2,8 +2,6 @@ common --announce_rc
 common --color=yes
 common --lockfile_mode=error
 
-build --worker_max_instances=4
-build --worker_sandboxing
 build --verbose_failures
 
 test --test_output=errors

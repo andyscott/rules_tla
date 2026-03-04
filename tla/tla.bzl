@@ -8,6 +8,8 @@ _PROPAGATABLE_TAGS = [
     "no-remote-cache",
 ]
 
+_SUPPORTS_PATH_MAPPING_REQUIREMENT = {"supports-path-mapping": "1"}
+
 _RUNFILES_BASH_INIT = """\
 # --- begin runfiles.bash initialization ---
 set -euo pipefail
@@ -45,12 +47,21 @@ def _resolve_execution_reqs(ctx, base_exec_reqs):
 
 def _tla(ctx):
     toolchain = ctx.toolchains["//tla:toolchain_type"]
+    java_runtime = ctx.toolchains["@bazel_tools//tools/jdk:runtime_toolchain_type"].java_runtime
     return struct(
         ctx = ctx,
-        worker_default_runfiles = toolchain.worker_default_runfiles,
-        worker_executable = toolchain.worker_executable,
-        worker_files_to_run = toolchain.worker_files_to_run,
+        files = toolchain.files,
+        jar = toolchain.jar,
+        java_executable_exec_path = java_runtime.java_executable_exec_path,
+        java_executable_runfiles_path = java_runtime.java_executable_runfiles_path,
+        java_runtime = java_runtime,
     )
+
+def _tla_tool_inputs(tla):
+    return depset(transitive = [
+        tla.files,
+        tla.java_runtime.files,
+    ])
 
 def _stage_input_file(ctx, file, stem):
     staged = ctx.actions.declare_file("{}.{}".format(stem, file.basename))
@@ -73,23 +84,72 @@ def _action_tla2sany_sany(ctx, tla, direct_inputs, all_inputs):
     outputs = [success_file]
 
     args = ctx.actions.args()
-    args.add("sany")
+    args.add(tla.jar)
     args.add(success_file)
     args.add(len(direct_inputs))
     args.add_all(all_inputs)
     args.set_param_file_format("multiline")
     args.use_param_file("@%s", use_always = True)
 
-    ctx.actions.run(
+    ctx.actions.run_shell(
         mnemonic = "Tla2Tools",
-        inputs = all_inputs,
+        inputs = depset(direct = all_inputs),
         outputs = outputs,
-        executable = tla.worker_executable,
-        tools = [tla.worker_files_to_run],
-        execution_requirements = _resolve_execution_reqs(
-            ctx,
-            {"supports-workers": "1"},
-        ),
+        command = """\
+set -euo pipefail
+if [[ "$#" -eq 1 && "$1" == @* ]]; then
+  argv=()
+  while IFS= read -r line; do
+    argv+=("$line")
+  done < "${{1#@}}"
+  set -- "${{argv[@]}}"
+fi
+
+jar="$1"
+success_file="$2"
+direct_count="$3"
+shift 3
+
+java_bin={java_bin}
+if [[ "$java_bin" != /* ]]; then
+  java_bin="$PWD/$java_bin"
+fi
+if [[ "$jar" != /* ]]; then
+  jar="$PWD/$jar"
+fi
+
+mkdir -p "$(dirname "$success_file")"
+
+scratch_dir="$(mktemp -d "${{PWD}}/rules_tla_sany.XXXXXX")"
+cleanup() {{
+  rm -rf "$scratch_dir"
+}}
+trap cleanup EXIT
+
+staged_modules=()
+for module in "$@"; do
+  dest="$scratch_dir/$(basename "$module")"
+  if [[ -e "$dest" ]]; then
+    echo >&2 "Duplicate TLA module name detected: $(basename "$module")"
+    exit 1
+  fi
+  cp "$module" "$dest"
+  staged_modules+=("$dest")
+done
+
+tool_args=(-cp "$jar" tla2sany.SANY -S)
+for ((i = 0; i < direct_count; i++)); do
+  tool_args+=("$(basename "${{staged_modules[$i]}}")")
+done
+
+(
+  cd "$scratch_dir"
+  "$java_bin" "${{tool_args[@]}}"
+)
+: > "$success_file"
+""".format(java_bin = _sh_string_literal(tla.java_executable_exec_path)),
+        tools = _tla_tool_inputs(tla),
+        execution_requirements = _resolve_execution_reqs(ctx, _SUPPORTS_PATH_MAPPING_REQUIREMENT),
         arguments = [args],
     )
 
@@ -183,23 +243,46 @@ def _action_pcal_trans(ctx, tla, file):
     outputs = [tla_file, cfg_file]
 
     args = ctx.actions.args()
-    args.add("translate")
+    args.add(tla.jar)
     args.add(file)
     args.add(tla_file)
     args.add(cfg_file)
-    args.set_param_file_format("multiline")
-    args.use_param_file("@%s", use_always = True)
 
-    ctx.actions.run(
+    ctx.actions.run_shell(
         mnemonic = "Tla2Tools",
-        inputs = [file],
+        inputs = depset(direct = [file]),
         outputs = outputs,
-        executable = tla.worker_executable,
-        tools = [tla.worker_files_to_run],
-        execution_requirements = _resolve_execution_reqs(
-            ctx,
-            {"supports-workers": "1"},
-        ),
+        command = """\
+set -euo pipefail
+
+jar="$1"
+source_file="$2"
+tla_output="$3"
+cfg_output="$4"
+
+if ! grep -Eq -- '--(fair[[:space:]]+)?algorithm([[:space:][:punct:]]|$)' "$source_file"; then
+  echo >&2 "pluscal_library expected a PlusCal algorithm in $(basename "$source_file")"
+  exit 1
+fi
+
+mkdir -p "$(dirname "$tla_output")" "$(dirname "$cfg_output")"
+
+scratch_dir="$(mktemp -d "${{PWD}}/rules_tla_pcal.XXXXXX")"
+cleanup() {{
+  rm -rf "$scratch_dir"
+}}
+trap cleanup EXIT
+
+staged_source="$scratch_dir/$(basename "$source_file")"
+cp "$source_file" "$staged_source"
+
+{java_bin} -cp "$jar" pcal.trans "$staged_source"
+
+cp "$staged_source" "$tla_output"
+cp "${{staged_source%.tla}}.cfg" "$cfg_output"
+""".format(java_bin = _sh_string_literal(tla.java_executable_exec_path)),
+        tools = _tla_tool_inputs(tla),
+        execution_requirements = _resolve_execution_reqs(ctx, _SUPPORTS_PATH_MAPPING_REQUIREMENT),
         arguments = [args],
     )
 
@@ -244,7 +327,10 @@ tla_library = rule(
         "deps": attr.label_list(providers = [TlaInfo]),
         "srcs": attr.label_list(allow_files = [".tla"]),
     },
-    toolchains = ["//tla:toolchain_type"],
+    toolchains = [
+        "//tla:toolchain_type",
+        "@bazel_tools//tools/jdk:runtime_toolchain_type",
+    ],
 )
 
 pluscal_library = rule(
@@ -253,7 +339,10 @@ pluscal_library = rule(
         "deps": attr.label_list(providers = [TlaInfo]),
         "srcs": attr.label_list(allow_files = [".tla"]),
     },
-    toolchains = ["//tla:toolchain_type"],
+    toolchains = [
+        "//tla:toolchain_type",
+        "@bazel_tools//tools/jdk:runtime_toolchain_type",
+    ],
 )
 
 def _action_tlc2_TLC(ctx, tla, main_file, module_files, cfg, max_depth, max_traces):
@@ -265,7 +354,7 @@ def _action_tlc2_TLC(ctx, tla, main_file, module_files, cfg, max_depth, max_trac
     outputs = [success_file, log_file]
 
     args = ctx.actions.args()
-    args.add("tlc_simulation")
+    args.add(tla.jar)
     args.add(main_file)
     args.add(staged_cfg)
     args.add(log_file)
@@ -276,16 +365,78 @@ def _action_tlc2_TLC(ctx, tla, main_file, module_files, cfg, max_depth, max_trac
     args.set_param_file_format("multiline")
     args.use_param_file("@%s", use_always = True)
 
-    ctx.actions.run(
+    ctx.actions.run_shell(
         mnemonic = "Tla2Tools",
-        inputs = module_files + [staged_cfg],
+        inputs = depset(direct = module_files + [staged_cfg]),
         outputs = outputs,
-        executable = tla.worker_executable,
-        tools = [tla.worker_files_to_run],
-        execution_requirements = _resolve_execution_reqs(
-            ctx,
-            {"supports-workers": "1"},
-        ),
+        command = """\
+set -euo pipefail
+if [[ "$#" -eq 1 && "$1" == @* ]]; then
+  argv=()
+  while IFS= read -r line; do
+    argv+=("$line")
+  done < "${{1#@}}"
+  set -- "${{argv[@]}}"
+fi
+
+jar="$1"
+spec_file="$2"
+cfg_file="$3"
+log_file="$4"
+success_file="$5"
+max_depth="$6"
+max_traces="$7"
+shift 7
+
+java_bin={java_bin}
+if [[ "$java_bin" != /* ]]; then
+  java_bin="$PWD/$java_bin"
+fi
+if [[ "$jar" != /* ]]; then
+  jar="$PWD/$jar"
+fi
+
+mkdir -p "$(dirname "$log_file")"
+mkdir -p "$(dirname "$success_file")"
+
+scratch_dir="$(mktemp -d "${{PWD}}/rules_tla_tlc.XXXXXX")"
+cleanup() {{
+  rm -rf "$scratch_dir"
+}}
+trap cleanup EXIT
+
+for module in "$@"; do
+  dest="$scratch_dir/$(basename "$module")"
+  if [[ -e "$dest" ]]; then
+    echo >&2 "Duplicate TLA module name detected: $(basename "$module")"
+    exit 1
+  fi
+  cp "$module" "$dest"
+done
+
+staged_spec="$scratch_dir/$(basename "$spec_file")"
+if [[ ! -e "$staged_spec" ]]; then
+  echo >&2 "Spec module was not staged for TLC: $(basename "$spec_file")"
+  exit 1
+fi
+
+staged_cfg="$scratch_dir/$(basename "$cfg_file")"
+cp "$cfg_file" "$staged_cfg"
+
+(
+  cd "$scratch_dir"
+  "$java_bin" -cp "$jar" tlc2.TLC \
+    -config "$(basename "$staged_cfg")" \
+    -depth "$max_depth" \
+    -simulate "num=$max_traces" \
+    "$(basename "$staged_spec")" \
+    -userFile "$log_file"
+)
+
+: > "$success_file"
+""".format(java_bin = _sh_string_literal(tla.java_executable_exec_path)),
+        tools = _tla_tool_inputs(tla),
+        execution_requirements = _resolve_execution_reqs(ctx, _SUPPORTS_PATH_MAPPING_REQUIREMENT),
         arguments = [args],
     )
 
@@ -328,7 +479,8 @@ def _tlc_test_implementation(ctx):
     executable = ctx.actions.declare_file(ctx.label.name)
     module_manifest = ctx.actions.declare_file("{}.modules".format(ctx.label.name))
 
-    worker_path = _runfiles_path(tla.worker_executable)
+    java_path = _normalize_runfiles_path(tla.java_executable_runfiles_path)
+    jar_path = _runfiles_path(tla.jar)
     spec_path = _runfiles_path(spec_file)
     cfg_path = _runfiles_path(ctx.file.cfg)
     module_manifest_path = _runfiles_path(module_manifest)
@@ -341,21 +493,47 @@ def _tlc_test_implementation(ctx):
     script = """#!/usr/bin/env bash
 {runfiles_init}
 
-worker=$(rlocation {worker})
+java_bin=$(rlocation {java_bin})
+tool_jar=$(rlocation {tool_jar})
 spec=$(rlocation {spec})
 cfg=$(rlocation {cfg})
 modules_manifest=$(rlocation {modules_manifest})
 log_dir="${{TEST_UNDECLARED_OUTPUTS_DIR:-${{TEST_TMPDIR:-$PWD}}}}"
 log_file="${{log_dir}}/{name}.tlc.log"
+scratch_dir="${{TEST_TMPDIR:-$PWD}}/{name}.tlc"
 mkdir -p "$log_dir"
+rm -rf "$scratch_dir"
+mkdir -p "$scratch_dir"
 
 module_args=()
 while IFS= read -r module_path; do
   [[ -n "$module_path" ]] || continue
-  module_args+=("$(rlocation "$module_path")")
+  src="$(rlocation "$module_path")"
+  dest="$scratch_dir/$(basename "$src")"
+  if [[ -e "$dest" ]]; then
+    echo >&2 "Duplicate TLA module name detected: $(basename "$src")"
+    exit 1
+  fi
+  cp "$src" "$dest"
+  module_args+=("$dest")
 done < "$modules_manifest"
 
-if ! "$worker" tlc_check "$spec" "$cfg" "$log_file" "${{module_args[@]}}"; then
+staged_spec="$scratch_dir/$(basename "$spec")"
+if [[ ! -e "$staged_spec" ]]; then
+  echo >&2 "Spec module was not staged for TLC: $(basename "$spec")"
+  exit 1
+fi
+
+staged_cfg="$scratch_dir/$(basename "$cfg")"
+cp "$cfg" "$staged_cfg"
+
+if ! (
+    cd "$scratch_dir"
+    exec "$java_bin" -cp "$tool_jar" tlc2.TLC \
+      -config "$(basename "$staged_cfg")" \
+      "$(basename "$staged_spec")" \
+      -userFile "$log_file"
+  ); then
   if [[ -f "$log_file" ]]; then
     echo >&2
     echo >&2 "TLC user output:"
@@ -365,11 +543,12 @@ if ! "$worker" tlc_check "$spec" "$cfg" "$log_file" "${{module_args[@]}}"; then
 fi
 """.format(
         cfg = _shell_quote(cfg_path),
+        java_bin = _shell_quote(java_path),
         modules_manifest = _shell_quote(module_manifest_path),
         name = ctx.label.name,
         runfiles_init = _RUNFILES_BASH_INIT,
         spec = _shell_quote(spec_path),
-        worker = _shell_quote(worker_path),
+        tool_jar = _shell_quote(jar_path),
     )
 
     ctx.actions.write(
@@ -383,8 +562,14 @@ fi
             ctx.file.cfg,
             module_manifest,
         ],
-        transitive_files = depset(module_files),
-    ).merge(tla.worker_default_runfiles).merge(ctx.attr._runfiles[DefaultInfo].default_runfiles)
+        transitive_files = depset(
+            transitive = [
+                depset(module_files),
+                tla.files,
+                tla.java_runtime.files,
+            ],
+        ),
+    ).merge(ctx.attr._runfiles[DefaultInfo].default_runfiles)
 
     return [
         DefaultInfo(
@@ -663,7 +848,10 @@ tlc_simulation = rule(
         "spec": attr.label(providers = [TlaInfo]),
         "cfg": attr.label(allow_single_file = [".cfg"]),
     },
-    toolchains = ["//tla:toolchain_type"],
+    toolchains = [
+        "//tla:toolchain_type",
+        "@bazel_tools//tools/jdk:runtime_toolchain_type",
+    ],
 )
 
 tlc_test = rule(
@@ -677,7 +865,10 @@ tlc_test = rule(
             default = "@bazel_tools//tools/bash/runfiles",
         ),
     },
-    toolchains = ["//tla:toolchain_type"],
+    toolchains = [
+        "//tla:toolchain_type",
+        "@bazel_tools//tools/jdk:runtime_toolchain_type",
+    ],
 )
 
 _apalache_check_test = rule(

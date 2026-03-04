@@ -17,7 +17,7 @@ tla.apalache(
     sha256 = "c539711703fd2550d8e065e486f0cbc8286846e14c16e92ef93ba3ece0149ef3",
     version = "0.52.1",
 )
-use_repo(tla, "apalache", "protobuf_java", "tla2tools")
+use_repo(tla, "apalache", "tla2tools")
 
 register_toolchains("//tla:default_toolchain")
 

@@ -9,6 +9,7 @@ Current shape:
 - Bazel 9 oriented
 - `BUILD.bazel` naming
 - separate rules for plain TLA and PlusCal
+- build actions support path mapping via `--experimental_output_paths=strip`
 
 ## Installation
 
@@ -224,6 +225,7 @@ Useful commands:
 ```bash
 ./tools/ci/presubmit.sh
 bazel test ...
+bazel test ... --experimental_output_paths=strip
 bazel build //examples/plain_module:plain_module
 bazel test //examples/hello_world:model_check
 bazel test //examples/module_graph/spec:model_check
@@ -231,6 +233,7 @@ bazel test //examples/apalache_counter:bounded_check
 bazel test //examples/apalache_counter:temporal_check
 bazel test //examples/apalache_counter:simulation
 cd e2e && bazel test //...
+cd e2e && bazel test //... --experimental_output_paths=strip
 ```
 
 For local formatting and file hygiene, install pre-commit and enable the hooks:

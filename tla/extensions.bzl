@@ -1,6 +1,6 @@
 """Bzlmod extension entry points for rules_tla."""
 
-load(":repositories.bzl", "apalache_repository", "protobuf_java_repository", "tla2tools_repository")
+load(":repositories.bzl", "apalache_repository", "tla2tools_repository")
 
 _DEFAULT_VERSION = "1.7.4"
 _DEFAULT_SHA256 = "936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88"
@@ -35,8 +35,6 @@ def _tla_extension_impl(module_ctx):
         sha256 = selected.sha256,
         version = selected.version,
     )
-
-    protobuf_java_repository(name = "protobuf_java")
 
     if apalache_registrations:
         selected_apalache = apalache_registrations[-1]
