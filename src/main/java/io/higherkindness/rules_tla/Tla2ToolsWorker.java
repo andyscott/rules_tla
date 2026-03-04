@@ -156,22 +156,31 @@ final class Tla2ToolsWorker {
     }
 
     private static Result runTlcSimulation(Request request, Path workDir) throws Exception {
-        if (request.args.size() < 5) {
-            return Result.failure("tlc_simulation expects a spec, cfg, log output, success file, and module files");
+        if (request.args.size() < 7) {
+            return Result.failure(
+                "tlc_simulation expects a spec, cfg, log output, success file, max depth, max traces, and module files"
+            );
         }
+
+        int maxDepth = parsePositiveInt(request.args.get(4), "tlc_simulation max depth");
+        int maxTraces = parsePositiveInt(request.args.get(5), "tlc_simulation max traces");
 
         Result toolResult = runTlc(
             workDir,
             resolvePath(workDir, request.args.get(0)),
             resolvePath(workDir, request.args.get(1)),
             resolvePath(workDir, request.args.get(2)),
-            collectModuleFiles(request.args, workDir, 4),
-            true
+            collectModuleFiles(request.args, workDir, 6),
+            true,
+            maxDepth,
+            maxTraces
         );
         Path successFile = resolvePath(workDir, request.args.get(3));
 
-        touch(successFile);
-        return Result.of(0, toolResult.output);
+        if (toolResult.exitCode == 0) {
+            touch(successFile);
+        }
+        return toolResult;
     }
 
     private static Result runTlcCheck(Request request, Path workDir) throws Exception {
@@ -185,7 +194,9 @@ final class Tla2ToolsWorker {
             resolvePath(workDir, request.args.get(1)),
             resolvePath(workDir, request.args.get(2)),
             collectModuleFiles(request.args, workDir, 3),
-            false
+            false,
+            0,
+            0
         );
     }
 
@@ -195,7 +206,9 @@ final class Tla2ToolsWorker {
         Path cfg,
         Path logFile,
         List<Path> moduleFiles,
-        boolean simulate
+        boolean simulate,
+        int maxDepth,
+        int maxTraces
     ) throws Exception {
         createParentDirectory(logFile);
 
@@ -214,7 +227,10 @@ final class Tla2ToolsWorker {
             args.add("-config");
             args.add(stagedCfg.toString());
             if (simulate) {
+                args.add("-depth");
+                args.add(Integer.toString(maxDepth));
                 args.add("-simulate");
+                args.add("num=" + maxTraces);
             }
             args.add(stagedSpec.toString());
             args.add("-userFile");
@@ -251,6 +267,19 @@ final class Tla2ToolsWorker {
     private static boolean containsPlusCal(Path source) throws IOException {
         String contents = Files.readString(source, StandardCharsets.UTF_8);
         return PLUSCAL_PATTERN.matcher(contents).find();
+    }
+
+    private static int parsePositiveInt(String value, String description) {
+        final int parsed;
+        try {
+            parsed = Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(description + " must be an integer: " + value, e);
+        }
+        if (parsed < 1) {
+            throw new IllegalArgumentException(description + " must be at least 1: " + value);
+        }
+        return parsed;
     }
 
     private static Path resolveWorkDir(String sandboxDir) {

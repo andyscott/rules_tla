@@ -4,20 +4,17 @@ load("@io_higherkindness_rules_tla//tla:tla.bzl", "pluscal_library", "tla_librar
 tla_library(
     name = "helper",
     srcs = ["CounterHelper.tla"],
-    tags = ["manual"],
 )
 
 tla_library(
     name = "counter_spec",
     srcs = ["CounterSpec.tla"],
-    tags = ["manual"],
     deps = [":helper"],
 )
 
 pluscal_library(
     name = "hello_world",
     srcs = ["HelloWorld.tla"],
-    tags = ["manual"],
 )
 
 tlc_test(
@@ -25,7 +22,6 @@ tlc_test(
     cfg = "counter.cfg",
     main_module = "CounterSpec",
     spec = ":counter_spec",
-    tags = ["manual"],
 )
 
 tlc_test(
@@ -33,12 +29,10 @@ tlc_test(
     cfg = "hello.cfg",
     main_module = "HelloWorld",
     spec = ":hello_world",
-    tags = ["manual"],
 )
 
 build_test(
     name = "build_smoke",
-    tags = ["manual"],
     targets = [
         ":helper",
         ":counter_spec",
@@ -48,27 +42,9 @@ build_test(
 
 test_suite(
     name = "smoke_test",
-    tags = ["manual"],
     tests = [
         ":build_smoke",
         ":counter_model_check",
         ":hello_model_check",
     ],
-)
-
-filegroup(
-    name = "workspace_files",
-    srcs = [
-        ".bazelversion",
-        "BUILD.bazel",
-        "CounterHelper.tla",
-        "CounterSpec.tla",
-        "HelloWorld.tla",
-        "MODULE.bazel",
-        "README.md",
-        "counter.cfg",
-        "hello.cfg",
-    ],
-    tags = ["manual"],
-    visibility = ["//visibility:public"],
 )

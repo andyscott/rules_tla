@@ -104,12 +104,19 @@ tla_simulation(
     name = "simulation",
     cfg = "demo.cfg",
     main_module = "Demo",
+    max_depth = 3,
+    max_traces = 1,
     spec = ":spec",
     tags = ["manual"],
 )
 ```
 
-This is intentionally not the main CI surface. Prefer `tlc_test` for merge-blocking checks.
+This is intentionally not the main CI surface. Bazel still fails the build if TLC exits
+nonzero. Prefer `tlc_test` for merge-blocking checks because simulation is nondeterministic
+and weaker than full model checking.
+
+`tla_simulation` runs bounded random simulation. By default it generates a single trace up to
+depth `100`. Increase `max_traces` or `max_depth` when you want a broader manual exploration.
 
 ## Module Graphs
 
@@ -157,4 +164,5 @@ bazel test ...
 bazel build //examples/plain_module:plain_module
 bazel test //examples/hello_world:model_check
 bazel test //examples/module_graph/spec:model_check
+cd e2e && bazel test //...
 ```

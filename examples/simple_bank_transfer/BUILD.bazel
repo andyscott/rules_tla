@@ -9,6 +9,8 @@ tla_simulation(
     name = "spec",
     cfg = "demo.cfg",
     main_module = "simple_bank_transfer",
+    max_depth = 3,
+    max_traces = 1,
     spec = ":simple_bank_transfer",
     tags = ["manual"],
 )

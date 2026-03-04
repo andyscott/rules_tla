@@ -246,7 +246,7 @@ pluscal_library = rule(
     },
 )
 
-def _action_tlc2_TLC(ctx, tla, main_file, module_files, cfg):
+def _action_tlc2_TLC(ctx, tla, main_file, module_files, cfg, max_depth, max_traces):
     success_file = ctx.actions.declare_file("{}.tlc2.TLC.success".format(ctx.label.name))
 
     log_file = ctx.actions.declare_file("{}.log".format(ctx.label.name))
@@ -260,6 +260,8 @@ def _action_tlc2_TLC(ctx, tla, main_file, module_files, cfg):
     args.add(staged_cfg)
     args.add(log_file)
     args.add(success_file)
+    args.add(max_depth)
+    args.add(max_traces)
     args.add_all(module_files)
     args.set_param_file_format("multiline")
     args.use_param_file("@%s", use_always = True)
@@ -285,8 +287,21 @@ def _action_tlc2_TLC(ctx, tla, main_file, module_files, cfg):
 
 def _tla_simulation_implementation(ctx):
     tla = _tla(ctx)
+    if ctx.attr.max_depth < 1:
+        fail("tla_simulation max_depth must be at least 1")
+    if ctx.attr.max_traces < 1:
+        fail("tla_simulation max_traces must be at least 1")
+
     main_file = _resolve_main_module_file(ctx.attr.spec[TlaInfo], ctx.attr.main_module, "tla_simulation")
-    result = _action_tlc2_TLC(ctx, tla, main_file, ctx.attr.spec[TlaInfo].module_files.to_list(), ctx.file.cfg)
+    result = _action_tlc2_TLC(
+        ctx,
+        tla,
+        main_file,
+        ctx.attr.spec[TlaInfo].module_files.to_list(),
+        ctx.file.cfg,
+        ctx.attr.max_depth,
+        ctx.attr.max_traces,
+    )
 
     default_info = DefaultInfo(
         files = depset(result.outputs),
@@ -371,6 +386,8 @@ tla_simulation = rule(
     implementation = _tla_simulation_implementation,
     attrs = {
         "main_module": attr.string(mandatory = True),
+        "max_depth": attr.int(default = 100),
+        "max_traces": attr.int(default = 1),
         "spec": attr.label(providers = [TlaInfo]),
         "cfg": attr.label(allow_single_file = [".cfg"]),
         "_worker": attr.label(
