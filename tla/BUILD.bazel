@@ -1,3 +1,4 @@
+load(":launcher.bzl", "java_jar_launcher")
 load(":toolchain.bzl", "apalache_toolchain", "tla_toolchain")
 
 toolchain_type(
@@ -31,5 +32,11 @@ toolchain(
     name = "default_apalache_toolchain",
     toolchain = ":default_apalache_toolchain_impl",
     toolchain_type = ":apalache_toolchain_type",
+    visibility = ["//visibility:public"],
+)
+
+java_jar_launcher(
+    name = "apalache_mc",
+    jar = "@apalache//:apalache_jar",
     visibility = ["//visibility:public"],
 )

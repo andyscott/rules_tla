@@ -125,6 +125,81 @@ Notes:
 - bounded checks still require at least one property to check
 - the rule surface supports bounded checks with explicit `length` and optional `cinit` / TLC-style `cfg`
 
+### `apalache_generate_traces`
+
+Use `apalache_generate_traces` when you want Apalache to run as a build action and
+materialize a replayable ITF trace corpus for downstream consumers.
+
+```starlark
+load("@rules_tla//tla:tla.bzl", "apalache_generate_traces")
+
+apalache_generate_traces(
+    name = "counter_traces",
+    inv = "TraceComplete",
+    length = 6,
+    main_module = "CounterModel",
+    max_traces = 1,
+    spec = ":spec",
+)
+```
+
+Behavior:
+
+- runs `apalache-mc check` or `apalache-mc simulate` as a normal build action
+- stages the transitive module graph into an isolated work directory
+- normalizes generated `.itf.json` traces into a declared output directory
+- emits a single JSON corpus file for downstream tests that want a stable file artifact
+- caches trace generation separately from downstream tests
+
+For Rust replay tests, the intended composition is:
+
+1. create the trace target with `apalache_generate_traces`
+2. optionally create a tiny support crate from `@rules_tla//tla/rust:trace_corpus_support.rs`
+3. pass that target into an ordinary `rust_test` through `data`
+4. use `$(rootpath :your_trace_target)` to point the test at the emitted corpus file
+
+That keeps Apalache execution separate in the Bazel graph while the Rust test stays a normal test target.
+
+For Rust + `tla-connect`, keep the BUILD graph explicit. A minimal pattern looks like:
+
+```starlark
+load("@rules_rs//rs:rust_library.bzl", "rust_library")
+load("@rules_rs//rs:rust_test.bzl", "rust_test")
+load("@rules_tla//tla:tla.bzl", "apalache_generate_traces")
+
+apalache_generate_traces(
+    name = "counter_traces",
+    inv = "TraceComplete",
+    length = 6,
+    main_module = "CounterModel",
+    spec = ":counter_model",
+)
+
+rust_library(
+    name = "trace_corpus_support",
+    srcs = ["@rules_tla//tla/rust:trace_corpus_support.rs"],
+    crate_name = "trace_corpus_support",
+    edition = "2021",
+    deps = _CRATE_DEPS,
+)
+
+rust_test(
+    name = "counter_replay_test",
+    srcs = ["tests/replay.rs"],
+    crate_name = "counter_replay_test",
+    data = [":counter_traces"],
+    env = {
+        "TLA_TRACE_CORPUS": "$(rootpath :counter_traces)",
+    },
+    deps = _CRATE_DEPS + [
+        ":counter_impl",
+        ":trace_corpus_support",
+    ],
+)
+```
+
+That keeps the formal work separate and cached while the Rust side stays a normal test target.
+
 ### `apalache_simulate`
 
 Use `apalache_simulate` for manual or exploratory Apalache simulation.
@@ -217,6 +292,7 @@ The repo includes examples for the supported shapes:
 - `examples/module_graph`: cross-package module graph plus TLC test
 - `examples/apalache_counter`: bounded symbolic checking, temporal properties, and simulation with Apalache
 - `examples/simple_bank_transfer`: manual TLC simulation for a PlusCal spec
+- `e2e/rust_tla_connect`: Rust replay testing with `tla-connect`, `rules_rust`, `rules_rs`, and `apalache_generate_traces`
 
 ## Development
 
@@ -232,8 +308,8 @@ bazel test //examples/module_graph/spec:model_check
 bazel test //examples/apalache_counter:bounded_check
 bazel test //examples/apalache_counter:temporal_check
 bazel test //examples/apalache_counter:simulation
-cd e2e && bazel test //...
-cd e2e && bazel test //... --experimental_output_paths=strip
+cd e2e && ./bazelw test //...
+cd e2e && ./bazelw test //... --experimental_output_paths=strip
 ```
 
 For local formatting and file hygiene, install pre-commit and enable the hooks:

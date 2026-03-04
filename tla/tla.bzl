@@ -79,6 +79,14 @@ TlaInfo = provider(
     },
 )
 
+ApalacheTraceInfo = provider(
+    doc = "Provides an Apalache-generated corpus of replayable ITF traces.",
+    fields = {
+        "trace_corpus": "file containing a JSON array of ITF traces",
+        "trace_dir": "directory artifact containing flattened .itf.json traces",
+    },
+)
+
 def _action_tla2sany_sany(ctx, tla, direct_inputs, all_inputs):
     success_file = ctx.actions.declare_file("{}.tla2sany.SANY.success".format(ctx.label.name))
     outputs = [success_file]
@@ -121,10 +129,12 @@ fi
 mkdir -p "$(dirname "$success_file")"
 
 scratch_dir="$(mktemp -d "${{PWD}}/rules_tla_sany.XXXXXX")"
+java_tmp_dir="$scratch_dir/java-tmp"
 cleanup() {{
   rm -rf "$scratch_dir"
 }}
 trap cleanup EXIT
+mkdir -p "$java_tmp_dir"
 
 staged_modules=()
 for module in "$@"; do
@@ -137,14 +147,14 @@ for module in "$@"; do
   staged_modules+=("$dest")
 done
 
-tool_args=(-cp "$jar" tla2sany.SANY -S)
+tool_args=(-Djava.io.tmpdir="$java_tmp_dir" -cp "$jar" tla2sany.SANY -S)
 for ((i = 0; i < direct_count; i++)); do
   tool_args+=("$(basename "${{staged_modules[$i]}}")")
 done
 
 (
   cd "$scratch_dir"
-  "$java_bin" "${{tool_args[@]}}"
+  TMPDIR="$java_tmp_dir" TMP="$java_tmp_dir" TEMP="$java_tmp_dir" "$java_bin" "${{tool_args[@]}}"
 )
 : > "$success_file"
 """.format(java_bin = _sh_string_literal(tla.java_executable_exec_path)),
@@ -839,6 +849,199 @@ fi
         ),
     ]
 
+def _apalache_generate_traces_implementation(ctx):
+    apalache = ctx.toolchains["//tla:apalache_toolchain_type"]
+    java_runtime = ctx.toolchains["@bazel_tools//tools/jdk:runtime_toolchain_type"].java_runtime
+
+    if ctx.attr.length < 1:
+        fail("apalache_generate_traces length must be at least 1")
+    if ctx.attr.max_traces < 1:
+        fail("apalache_generate_traces max_traces must be at least 1")
+    if ctx.attr.mode not in ["check", "simulate"]:
+        fail("apalache_generate_traces mode must be one of check or simulate")
+
+    module_files = ctx.attr.spec[TlaInfo].module_files.to_list()
+    spec_file = _resolve_main_module_file(ctx.attr.spec[TlaInfo], ctx.attr.main_module, "apalache_generate_traces")
+    trace_dir = ctx.actions.declare_directory("{}.traces".format(ctx.label.name))
+    trace_corpus = ctx.actions.declare_file("{}.itf.json".format(ctx.label.name))
+
+    args = ctx.actions.args()
+    args.add(apalache.jar)
+    args.add(trace_dir.path)
+    args.add(trace_corpus)
+    args.add(spec_file)
+    args.add(ctx.file.cfg if ctx.file.cfg else "")
+    args.add(ctx.attr.mode)
+    args.add(ctx.attr.inv)
+    args.add(ctx.attr.init)
+    args.add(ctx.attr.next)
+    args.add(ctx.attr.length)
+    args.add(ctx.attr.max_traces)
+    args.add(ctx.attr.cinit)
+    args.add("1" if ctx.attr.no_deadlock else "0")
+    args.add_all(module_files)
+    args.set_param_file_format("multiline")
+    args.use_param_file("@%s", use_always = True)
+
+    ctx.actions.run_shell(
+        mnemonic = "ApalacheGenerateTraces",
+        inputs = depset(direct = module_files + ([ctx.file.cfg] if ctx.file.cfg else [])),
+        outputs = [trace_dir, trace_corpus],
+        command = """\
+set -euo pipefail
+if [[ "$#" -eq 1 && "$1" == @* ]]; then
+  argv=()
+  while IFS= read -r line; do
+    argv+=("$line")
+  done < "${{1#@}}"
+  set -- "${{argv[@]}}"
+fi
+
+apalache_jar="$1"
+trace_dir="$2"
+trace_corpus="$3"
+spec_file="$4"
+cfg_file="$5"
+mode="$6"
+inv="$7"
+init="$8"
+next="$9"
+length="${{10}}"
+max_traces="${{11}}"
+cinit="${{12}}"
+no_deadlock="${{13}}"
+shift 13
+
+java_bin={java_bin}
+if [[ "$java_bin" != /* ]]; then
+  java_bin="$PWD/$java_bin"
+fi
+if [[ "$apalache_jar" != /* ]]; then
+  apalache_jar="$PWD/$apalache_jar"
+fi
+
+rm -rf "$trace_dir"
+mkdir -p "$trace_dir"
+mkdir -p "$(dirname "$trace_corpus")"
+
+scratch_dir="$(mktemp -d "${{PWD}}/rules_tla_apalache.XXXXXX")"
+java_tmp_dir="$scratch_dir/java-tmp"
+work_dir="$scratch_dir/work"
+out_dir="$scratch_dir/out"
+log_file="$scratch_dir/apalache.log"
+cleanup() {{
+  rm -rf "$scratch_dir"
+}}
+trap cleanup EXIT
+mkdir -p "$java_tmp_dir" "$work_dir" "$out_dir"
+
+for module in "$@"; do
+  dest="$work_dir/$(basename "$module")"
+  if [[ -e "$dest" ]]; then
+    echo >&2 "Duplicate TLA module name detected: $(basename "$module")"
+    exit 1
+  fi
+  cp "$module" "$dest"
+done
+
+staged_spec="$work_dir/$(basename "$spec_file")"
+if [[ ! -e "$staged_spec" ]]; then
+  echo >&2 "Spec module was not staged for Apalache: $(basename "$spec_file")"
+  exit 1
+fi
+
+args=(
+  "--out-dir=$out_dir"
+  "$mode"
+  "--init=$init"
+  "--next=$next"
+  "--length=$length"
+  "--inv=$inv"
+)
+
+if [[ "$mode" == "simulate" ]]; then
+  args+=("--max-run=$max_traces")
+else
+  args+=("--max-error=$max_traces")
+fi
+
+if [[ -n "$cfg_file" ]]; then
+  staged_cfg="$work_dir/$(basename "$cfg_file")"
+  cp "$cfg_file" "$staged_cfg"
+  args+=("--config=$(basename "$staged_cfg")")
+fi
+
+if [[ -n "$cinit" ]]; then
+  args+=("--cinit=$cinit")
+fi
+
+if [[ "$no_deadlock" == "1" ]]; then
+  args+=("--no-deadlock")
+fi
+
+args+=("$(basename "$staged_spec")")
+
+set +e
+(
+  cd "$work_dir"
+  TMPDIR="$java_tmp_dir" TMP="$java_tmp_dir" TEMP="$java_tmp_dir" \
+    "$java_bin" -Djava.io.tmpdir="$java_tmp_dir" -jar "$apalache_jar" "${{args[@]}}" >"$log_file" 2>&1
+)
+status="$?"
+set -e
+
+if [[ "$status" -ne 0 && "$status" -ne 12 ]]; then
+  cat >&2 "$log_file"
+  exit "$status"
+fi
+
+trace_count=0
+first_trace=1
+printf '[\n' > "$trace_corpus"
+while IFS= read -r trace_file; do
+  trace_count=$((trace_count + 1))
+  normalized_trace="$(printf '%s/trace_%03d.itf.json' "$trace_dir" "$trace_count")"
+  cp "$trace_file" "$normalized_trace"
+  if [[ "$first_trace" -eq 0 ]]; then
+    printf ',\n' >> "$trace_corpus"
+  fi
+  cat "$normalized_trace" >> "$trace_corpus"
+  first_trace=0
+done < <(find "$out_dir" -type f -name '*.itf.json' | sort)
+
+printf '\n]\n' >> "$trace_corpus"
+
+if [[ "$trace_count" -eq 0 ]]; then
+  cat >&2 "$log_file"
+  echo >&2 "Apalache did not produce any .itf.json traces"
+  exit 1
+fi
+""".format(java_bin = _sh_string_literal(java_runtime.java_executable_exec_path)),
+        tools = depset(transitive = [
+            apalache.files,
+            java_runtime.files,
+        ]),
+        execution_requirements = _resolve_execution_reqs(ctx, _SUPPORTS_PATH_MAPPING_REQUIREMENT),
+        arguments = [args],
+    )
+
+    runfiles = ctx.runfiles(files = [trace_dir, trace_corpus])
+
+    return [
+        DefaultInfo(
+            files = depset([trace_corpus]),
+            runfiles = runfiles,
+        ),
+        ApalacheTraceInfo(
+            trace_corpus = trace_corpus,
+            trace_dir = trace_dir,
+        ),
+        OutputGroupInfo(
+            trace_corpus = depset([trace_corpus]),
+            trace_dir = depset([trace_dir]),
+        ),
+    ]
+
 tlc_simulation = rule(
     implementation = _tlc_simulation_implementation,
     attrs = {
@@ -900,6 +1103,27 @@ def apalache_check(name, **kwargs):
         name = name,
         **kwargs
     )
+
+apalache_generate_traces = rule(
+    implementation = _apalache_generate_traces_implementation,
+    attrs = {
+        "cfg": attr.label(allow_single_file = [".cfg"]),
+        "cinit": attr.string(),
+        "init": attr.string(default = "Init"),
+        "inv": attr.string(mandatory = True),
+        "length": attr.int(default = 10),
+        "main_module": attr.string(mandatory = True),
+        "max_traces": attr.int(default = 1),
+        "mode": attr.string(default = "check"),
+        "next": attr.string(default = "Next"),
+        "no_deadlock": attr.bool(default = False),
+        "spec": attr.label(providers = [TlaInfo]),
+    },
+    toolchains = [
+        "//tla:apalache_toolchain_type",
+        "@bazel_tools//tools/jdk:runtime_toolchain_type",
+    ],
+)
 
 _apalache_simulate_test = rule(
     implementation = _apalache_simulate_implementation,

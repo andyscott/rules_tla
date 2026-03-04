@@ -1,6 +1,7 @@
 test_suite(
     name = "e2e_tests",
     tests = [
+        "//rust_tla_connect:rust_tla_connect_test_suite",
         "//smoke:smoke_test",
     ],
 )
