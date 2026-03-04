@@ -12,3 +12,13 @@ java_binary(
         "@tla2tools",
     ],
 )
+
+filegroup(
+    name = "repo_files",
+    srcs = [
+        "BUILD.bazel",
+        "Tla2ToolsWorker.java",
+    ],
+    tags = ["manual"],
+    visibility = ["//visibility:public"],
+)

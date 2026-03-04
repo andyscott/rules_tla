@@ -119,17 +119,26 @@ def _shell_quote(value):
 def _ordered_module_files(direct_files, dep_infos):
     ordered_files = []
     seen_paths = {}
+    seen_module_names = {}
 
     for file in direct_files:
+        existing = seen_module_names.get(file.basename)
+        if existing and existing.path != file.path:
+            fail("duplicate TLA module name {} provided by {} and {}".format(file.basename, existing.path, file.path))
         ordered_files.append(file)
         seen_paths[file.path] = True
+        seen_module_names[file.basename] = file
 
     for dep in dep_infos:
         for file in dep[TlaInfo].module_files.to_list():
+            existing = seen_module_names.get(file.basename)
+            if existing and existing.path != file.path:
+                fail("duplicate TLA module name {} provided by {} and {}".format(file.basename, existing.path, file.path))
             if file.path in seen_paths:
                 continue
             ordered_files.append(file)
             seen_paths[file.path] = True
+            seen_module_names[file.basename] = file
 
     return ordered_files
 

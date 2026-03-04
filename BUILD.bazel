@@ -1,4 +1,20 @@
 exports_files([
     ".bazelversion",
     "MODULE.bazel",
+    "README.md",
 ])
+
+filegroup(
+    name = "repo_files",
+    srcs = [
+        ".bazelversion",
+        "BUILD.bazel",
+        "MODULE.bazel",
+        "REPO.bazel",
+        "//src/main/java/io/higherkindness/rules_tla:repo_files",
+        "//third_party/bazel/src/main/java/com/google/devtools/build/lib/worker:repo_files",
+        "//tla:repo_files",
+    ],
+    tags = ["manual"],
+    visibility = ["//visibility:public"],
+)

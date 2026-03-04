@@ -6,3 +6,13 @@ java_library(
     visibility = ["//visibility:public"],
     deps = ["@protobuf_java"],
 )
+
+filegroup(
+    name = "repo_files",
+    srcs = [
+        "BUILD.bazel",
+        "WorkerProtocol.java",
+    ],
+    tags = ["manual"],
+    visibility = ["//visibility:public"],
+)

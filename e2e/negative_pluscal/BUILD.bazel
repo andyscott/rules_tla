@@ -1,0 +1,19 @@
+load("@io_higherkindness_rules_tla//tla:tla.bzl", "pluscal_library")
+
+pluscal_library(
+    name = "bad_spec",
+    srcs = ["NotPlusCal.tla"],
+    tags = ["manual"],
+)
+
+filegroup(
+    name = "workspace_files",
+    srcs = [
+        ".bazelversion",
+        "BUILD.bazel",
+        "MODULE.bazel",
+        "NotPlusCal.tla",
+    ],
+    tags = ["manual"],
+    visibility = ["//visibility:public"],
+)

@@ -1,6 +1,20 @@
 load("@rules_java//java:defs.bzl", "java_test")
 
 java_test(
+    name = "e2e_workspace_test",
+    size = "large",
+    timeout = "long",
+    srcs = ["E2eWorkspaceTest.java"],
+    data = [
+        "//:repo_files",
+        "//e2e/negative_pluscal:workspace_files",
+        "//e2e/smoke:workspace_files",
+    ],
+    env_inherit = ["PATH"],
+    main_class = "io.higherkindness.rules_tla.E2eWorkspaceTest",
+)
+
+java_test(
     name = "repo_layout_test",
     srcs = ["RepoLayoutTest.java"],
     data = [
