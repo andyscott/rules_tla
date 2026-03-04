@@ -93,14 +93,14 @@ Behavior:
 - stages the full transitive module graph into TLC
 - fails the Bazel test on TLC errors
 
-### `tla_simulation`
+### `tlc_simulation`
 
-Use `tla_simulation` for manual or exploratory TLC simulation.
+Use `tlc_simulation` for manual or exploratory TLC simulation.
 
 ```starlark
-load("@io_higherkindness_rules_tla//tla:tla.bzl", "tla_simulation")
+load("@io_higherkindness_rules_tla//tla:tla.bzl", "tlc_simulation")
 
-tla_simulation(
+tlc_simulation(
     name = "simulation",
     cfg = "demo.cfg",
     main_module = "Demo",
@@ -115,8 +115,11 @@ This is intentionally not the main CI surface. Bazel still fails the build if TL
 nonzero. Prefer `tlc_test` for merge-blocking checks because simulation is nondeterministic
 and weaker than full model checking.
 
-`tla_simulation` runs bounded random simulation. By default it generates a single trace up to
+`tlc_simulation` runs bounded random simulation. By default it generates a single trace up to
 depth `100`. Increase `max_traces` or `max_depth` when you want a broader manual exploration.
+
+`tla_simulation` remains available as a backward-compatible alias, but new code should prefer
+`tlc_simulation`.
 
 ## Module Graphs
 

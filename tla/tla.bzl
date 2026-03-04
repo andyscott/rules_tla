@@ -277,14 +277,14 @@ def _action_tlc2_TLC(ctx, tla, main_file, module_files, cfg, max_depth, max_trac
         log_file = log_file,
     )
 
-def _tla_simulation_implementation(ctx):
+def _tlc_simulation_implementation(ctx):
     tla = _tla(ctx)
     if ctx.attr.max_depth < 1:
-        fail("tla_simulation max_depth must be at least 1")
+        fail("tlc_simulation max_depth must be at least 1")
     if ctx.attr.max_traces < 1:
-        fail("tla_simulation max_traces must be at least 1")
+        fail("tlc_simulation max_traces must be at least 1")
 
-    main_file = _resolve_main_module_file(ctx.attr.spec[TlaInfo], ctx.attr.main_module, "tla_simulation")
+    main_file = _resolve_main_module_file(ctx.attr.spec[TlaInfo], ctx.attr.main_module, "tlc_simulation")
     result = _action_tlc2_TLC(
         ctx,
         tla,
@@ -375,8 +375,8 @@ fi
         ),
     ]
 
-tla_simulation = rule(
-    implementation = _tla_simulation_implementation,
+tlc_simulation = rule(
+    implementation = _tlc_simulation_implementation,
     attrs = {
         "main_module": attr.string(mandatory = True),
         "max_depth": attr.int(default = 100),
@@ -386,6 +386,9 @@ tla_simulation = rule(
     },
     toolchains = ["//tla:toolchain_type"],
 )
+
+# Backward-compatible alias. Prefer tlc_simulation in new code.
+tla_simulation = tlc_simulation
 
 tlc_test = rule(
     implementation = _tlc_test_implementation,

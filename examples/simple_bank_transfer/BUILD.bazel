@@ -1,11 +1,11 @@
-load("//tla:tla.bzl", "pluscal_library", "tla_simulation")
+load("//tla:tla.bzl", "pluscal_library", "tlc_simulation")
 
 pluscal_library(
     name = "simple_bank_transfer",
     srcs = ["simple_bank_transfer.tla"],
 )
 
-tla_simulation(
+tlc_simulation(
     name = "spec",
     cfg = "demo.cfg",
     main_module = "simple_bank_transfer",
