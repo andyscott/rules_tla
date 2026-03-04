@@ -1,4 +1,4 @@
-load("@io_higherkindness_rules_tla//tla:tla.bzl", "pluscal_library")
+load("@rules_tla//tla:tla.bzl", "pluscal_library")
 
 pluscal_library(
     name = "bad_spec_under_test",

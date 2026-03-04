@@ -666,9 +666,6 @@ tlc_simulation = rule(
     toolchains = ["//tla:toolchain_type"],
 )
 
-# Backward-compatible alias. Prefer tlc_simulation in new code.
-tla_simulation = tlc_simulation
-
 tlc_test = rule(
     implementation = _tlc_test_implementation,
     test = True,

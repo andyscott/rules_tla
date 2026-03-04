@@ -1,6 +1,5 @@
 module(
-    name = "io_higherkindness_rules_tla",
-    compatibility_level = 0,
+    name = "rules_tla",
 )
 
 bazel_dep(name = "bazel_skylib", version = "1.8.2")

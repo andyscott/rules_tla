@@ -1,5 +1,5 @@
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
-load("@io_higherkindness_rules_tla//tla:tla.bzl", "apalache_check", "apalache_simulate", "pluscal_library", "tla_library", "tlc_test")
+load("@rules_tla//tla:tla.bzl", "apalache_check", "apalache_simulate", "pluscal_library", "tla_library", "tlc_test")
 
 tla_library(
     name = "helper",

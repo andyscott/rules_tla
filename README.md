@@ -15,20 +15,20 @@ Current shape:
 Add the module to `MODULE.bazel`:
 
 ```starlark
-bazel_dep(name = "io_higherkindness_rules_tla", version = "<pinned version>")
+bazel_dep(name = "rules_tla", version = "<pinned version>")
 ```
 
 When developing against a local checkout, use `local_path_override` instead:
 
 ```starlark
-bazel_dep(name = "io_higherkindness_rules_tla", version = "0.0.0")
+bazel_dep(name = "rules_tla", version = "0.0.0")
 local_path_override(
-    module_name = "io_higherkindness_rules_tla",
+    module_name = "rules_tla",
     path = "/absolute/path/to/rules_tla",
 )
 ```
 
-Load the rules from `@io_higherkindness_rules_tla//tla:tla.bzl`.
+Load the rules from `@rules_tla//tla:tla.bzl`.
 
 ## Rule Overview
 
@@ -37,7 +37,7 @@ Load the rules from `@io_higherkindness_rules_tla//tla:tla.bzl`.
 Use `tla_library` for plain `.tla` modules that are already valid TLA+.
 
 ```starlark
-load("@io_higherkindness_rules_tla//tla:tla.bzl", "tla_library")
+load("@rules_tla//tla:tla.bzl", "tla_library")
 
 tla_library(
     name = "helper",
@@ -57,7 +57,7 @@ Behavior:
 Use `pluscal_library` for `.tla` files that contain a PlusCal algorithm.
 
 ```starlark
-load("@io_higherkindness_rules_tla//tla:tla.bzl", "pluscal_library")
+load("@rules_tla//tla:tla.bzl", "pluscal_library")
 
 pluscal_library(
     name = "spec",
@@ -77,7 +77,7 @@ Behavior:
 Use `tlc_test` for real model checking in CI. This is the main rule for correctness checks.
 
 ```starlark
-load("@io_higherkindness_rules_tla//tla:tla.bzl", "tlc_test")
+load("@rules_tla//tla:tla.bzl", "tlc_test")
 
 tlc_test(
     name = "model_check",
@@ -98,7 +98,7 @@ Behavior:
 Use `apalache_check` for bounded symbolic checking with Apalache.
 
 ```starlark
-load("@io_higherkindness_rules_tla//tla:tla.bzl", "apalache_check")
+load("@rules_tla//tla:tla.bzl", "apalache_check")
 
 apalache_check(
     name = "bounded_check",
@@ -129,7 +129,7 @@ Notes:
 Use `apalache_simulate` for manual or exploratory Apalache simulation.
 
 ```starlark
-load("@io_higherkindness_rules_tla//tla:tla.bzl", "apalache_simulate")
+load("@rules_tla//tla:tla.bzl", "apalache_simulate")
 
 apalache_simulate(
     name = "simulation",
@@ -159,7 +159,7 @@ Notes:
 Use `tlc_simulation` for manual or exploratory TLC simulation.
 
 ```starlark
-load("@io_higherkindness_rules_tla//tla:tla.bzl", "tlc_simulation")
+load("@rules_tla//tla:tla.bzl", "tlc_simulation")
 
 tlc_simulation(
     name = "simulation",
@@ -179,16 +179,13 @@ and weaker than full model checking.
 `tlc_simulation` runs bounded random simulation. By default it generates a single trace up to
 depth `100`. Increase `max_traces` or `max_depth` when you want a broader manual exploration.
 
-`tla_simulation` remains available as a backward-compatible alias, but new code should prefer
-`tlc_simulation`.
-
 ## Module Graphs
 
 Specs can depend on other module libraries through `deps`. The main module is resolved by
 module name, not by source ordering.
 
 ```starlark
-load("@io_higherkindness_rules_tla//tla:tla.bzl", "tla_library", "tlc_test")
+load("@rules_tla//tla:tla.bzl", "tla_library", "tlc_test")
 
 tla_library(
     name = "spec",

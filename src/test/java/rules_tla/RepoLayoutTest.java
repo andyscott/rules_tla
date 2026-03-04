@@ -1,4 +1,4 @@
-package io.higherkindness.rules_tla;
+package rules_tla;
 
 import java.nio.file.Files;
 import java.nio.file.Path;

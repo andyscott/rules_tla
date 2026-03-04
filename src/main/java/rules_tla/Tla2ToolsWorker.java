@@ -1,4 +1,4 @@
-package io.higherkindness.rules_tla;
+package rules_tla;
 
 import com.google.devtools.build.lib.worker.WorkerProtocol;
 import java.io.File;

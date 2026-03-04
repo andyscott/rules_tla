@@ -14,7 +14,7 @@ tla_toolchain = rule(
     attrs = {
         "worker": attr.label(
             cfg = "exec",
-            default = "//src/main/java/io/higherkindness/rules_tla:worker",
+            default = "//src/main/java/rules_tla:worker",
             executable = True,
         ),
     },
