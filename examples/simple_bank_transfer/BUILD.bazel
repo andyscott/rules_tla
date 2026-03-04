@@ -1,6 +1,6 @@
-load("//tla:tla.bzl", "tla_library", "tla_simulation")
+load("//tla:tla.bzl", "pluscal_library", "tla_simulation")
 
-tla_library(
+pluscal_library(
     name = "simple_bank_transfer",
     srcs = ["simple_bank_transfer.tla"],
 )

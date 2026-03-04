@@ -58,8 +58,8 @@ def _stage_input_file(ctx, file, stem):
 TlaInfo = provider(
     doc = "Provides TLA files",
     fields = {
-        "direct_module_files": "the translated or copied .tla files declared directly by this target",
-        "module_files": "a depset of all translated or copied .tla files in this target's transitive graph",
+        "direct_module_files": "the direct .tla modules contributed by this target",
+        "module_files": "a depset of all .tla modules in this target's transitive graph",
     },
 )
 
@@ -133,6 +133,19 @@ def _ordered_module_files(direct_files, dep_infos):
 
     return ordered_files
 
+def _module_graph(ctx, direct_tla_files):
+    transitive_module_files = depset(
+        direct = direct_tla_files,
+        transitive = [dep[TlaInfo].module_files for dep in ctx.attr.deps],
+    )
+    return struct(
+        ordered_module_files = _ordered_module_files(direct_tla_files, ctx.attr.deps),
+        tla_info = TlaInfo(
+            direct_module_files = direct_tla_files,
+            module_files = transitive_module_files,
+        ),
+    )
+
 def _action_pcal_trans(ctx, tla, file):
     module_name = file.basename
     if module_name.endswith(".tla"):
@@ -171,38 +184,51 @@ def _action_pcal_trans(ctx, tla, file):
 
 def _tla_library_implementation(ctx):
     tla = _tla(ctx)
-
-    pcals = [_action_pcal_trans(ctx, tla, f) for f in ctx.files.srcs]
-
-    pcal_outputs = [of for pcal in pcals for of in pcal.outputs]
-
-    direct_tla_files = [pcal.tla_file for pcal in pcals]
-    ordered_module_files = _ordered_module_files(direct_tla_files, ctx.attr.deps)
-    transitive_module_files = depset(
-        direct = direct_tla_files,
-        transitive = [dep[TlaInfo].module_files for dep in ctx.attr.deps],
-    )
-    sany_output = _action_tla2sany_sany(ctx, tla, direct_tla_files, ordered_module_files).success_file
-
-    tla_info = TlaInfo(
-        direct_module_files = direct_tla_files,
-        module_files = transitive_module_files,
-    )
+    module_graph = _module_graph(ctx, ctx.files.srcs)
+    sany_output = _action_tla2sany_sany(ctx, tla, ctx.files.srcs, module_graph.ordered_module_files).success_file
 
     default_info = DefaultInfo(
-        files = depset(pcal_outputs + [sany_output]),
+        files = depset(ctx.files.srcs + [sany_output]),
     )
 
     return [
         default_info,
-        tla_info,
+        module_graph.tla_info,
+    ]
+
+def _pluscal_library_implementation(ctx):
+    tla = _tla(ctx)
+    translations = [_action_pcal_trans(ctx, tla, f) for f in ctx.files.srcs]
+    translation_outputs = [output for translation in translations for output in translation.outputs]
+    translated_modules = [translation.tla_file for translation in translations]
+    module_graph = _module_graph(ctx, translated_modules)
+    sany_output = _action_tla2sany_sany(ctx, tla, translated_modules, module_graph.ordered_module_files).success_file
+
+    return [
+        DefaultInfo(
+            files = depset(translation_outputs + [sany_output]),
+        ),
+        module_graph.tla_info,
     ]
 
 tla_library = rule(
     implementation = _tla_library_implementation,
     attrs = {
         "deps": attr.label_list(providers = [TlaInfo]),
-        "srcs": attr.label_list(allow_files = True),
+        "srcs": attr.label_list(allow_files = [".tla"]),
+        "_worker": attr.label(
+            cfg = "exec",
+            default = "//src/main/java/io/higherkindness/rules_tla:worker",
+            executable = True,
+        ),
+    },
+)
+
+pluscal_library = rule(
+    implementation = _pluscal_library_implementation,
+    attrs = {
+        "deps": attr.label_list(providers = [TlaInfo]),
+        "srcs": attr.label_list(allow_files = [".tla"]),
         "_worker": attr.label(
             cfg = "exec",
             default = "//src/main/java/io/higherkindness/rules_tla:worker",
@@ -337,7 +363,7 @@ tla_simulation = rule(
     attrs = {
         "main_module": attr.string(mandatory = True),
         "spec": attr.label(providers = [TlaInfo]),
-        "cfg": attr.label(allow_single_file = True),
+        "cfg": attr.label(allow_single_file = [".cfg"]),
         "_worker": attr.label(
             cfg = "exec",
             default = "//src/main/java/io/higherkindness/rules_tla:worker",
@@ -352,7 +378,7 @@ tlc_test = rule(
     attrs = {
         "main_module": attr.string(mandatory = True),
         "spec": attr.label(providers = [TlaInfo]),
-        "cfg": attr.label(allow_single_file = True),
+        "cfg": attr.label(allow_single_file = [".cfg"]),
         "_worker": attr.label(
             cfg = "target",
             default = "//src/main/java/io/higherkindness/rules_tla:worker",

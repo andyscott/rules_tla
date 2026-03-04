@@ -134,9 +134,7 @@ final class Tla2ToolsWorker {
         Path cfgOutput = resolvePath(workDir, request.args.get(2));
 
         if (!containsPlusCal(source)) {
-            copyFile(source, tlaOutput);
-            writeEmptyFile(cfgOutput);
-            return Result.success();
+            return Result.failure("pluscal_library expected a PlusCal algorithm in " + source.getFileName());
         }
 
         Path scratchDir = Files.createTempDirectory(workDir, "rules_tla_pcal_");
@@ -280,10 +278,6 @@ final class Tla2ToolsWorker {
     private static void touch(Path path) throws IOException {
         createParentDirectory(path);
         Files.write(path, new byte[0], StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-    }
-
-    private static void writeEmptyFile(Path path) throws IOException {
-        touch(path);
     }
 
     private static void copyFile(Path source, Path destination) throws IOException {
