@@ -76,28 +76,52 @@ final class Tla2ToolsWorker {
                 return runTranslate(request, workDir);
             case "tlc_simulation":
                 return runTlcSimulation(request, workDir);
+            case "tlc_check":
+                return runTlcCheck(request, workDir);
             default:
                 return Result.failure("Unknown worker mode: " + request.mode);
         }
     }
 
     private static Result runSany(Request request, Path workDir) throws Exception {
-        if (request.args.size() < 2) {
-            return Result.failure("sany expects a success file followed by at least one source file");
+        if (request.args.size() < 3) {
+            return Result.failure("sany expects a success file, a direct module count, and module files");
         }
 
         Path successFile = resolvePath(workDir, request.args.get(0));
-        List<String> toolArgs = new ArrayList<>();
-        toolArgs.add("-S");
-        for (int i = 1; i < request.args.size(); i++) {
-            toolArgs.add(resolvePath(workDir, request.args.get(i)).toString());
+        int directModuleCount;
+        try {
+            directModuleCount = Integer.parseInt(request.args.get(1));
+        } catch (NumberFormatException e) {
+            return Result.failure("Invalid direct module count for sany: " + request.args.get(1));
         }
 
-        Result toolResult = runTool("tla2sany.SANY", toolArgs, workDir);
-        if (toolResult.exitCode == 0) {
-            touch(successFile);
+        List<Path> moduleFiles = new ArrayList<>();
+        for (int i = 2; i < request.args.size(); i++) {
+            moduleFiles.add(resolvePath(workDir, request.args.get(i)));
         }
-        return toolResult;
+
+        if (directModuleCount < 1 || directModuleCount > moduleFiles.size()) {
+            return Result.failure("sany direct module count must be between 1 and " + moduleFiles.size());
+        }
+
+        Path scratchDir = Files.createTempDirectory(workDir, "rules_tla_sany_");
+        try {
+            List<Path> stagedModules = stageModuleFiles(moduleFiles, scratchDir);
+            List<String> toolArgs = new ArrayList<>();
+            toolArgs.add("-S");
+            for (int i = 0; i < directModuleCount; i++) {
+                toolArgs.add(stagedModules.get(i).toString());
+            }
+
+            Result toolResult = runTool("tla2sany.SANY", toolArgs, scratchDir);
+            if (toolResult.exitCode == 0) {
+                touch(successFile);
+            }
+            return toolResult;
+        } finally {
+            deleteRecursively(scratchDir);
+        }
     }
 
     private static Result runTranslate(Request request, Path workDir) throws Exception {
@@ -134,32 +158,74 @@ final class Tla2ToolsWorker {
     }
 
     private static Result runTlcSimulation(Request request, Path workDir) throws Exception {
-        if (request.args.size() != 4) {
-            return Result.failure("tlc_simulation expects a spec, cfg, log output, and success file");
+        if (request.args.size() < 5) {
+            return Result.failure("tlc_simulation expects a spec, cfg, log output, success file, and module files");
         }
 
-        Path spec = resolvePath(workDir, request.args.get(0));
-        Path cfg = resolvePath(workDir, request.args.get(1));
-        Path logFile = resolvePath(workDir, request.args.get(2));
-        Path successFile = resolvePath(workDir, request.args.get(3));
-
-        createParentDirectory(logFile);
-
-        Result toolResult = runTool(
-            "tlc2.TLC",
-            List.of(
-                "-config",
-                cfg.toString(),
-                "-simulate",
-                spec.toString(),
-                "-userFile",
-                logFile.toString()
-            ),
-            workDir
+        Result toolResult = runTlc(
+            workDir,
+            resolvePath(workDir, request.args.get(0)),
+            resolvePath(workDir, request.args.get(1)),
+            resolvePath(workDir, request.args.get(2)),
+            collectModuleFiles(request.args, workDir, 4),
+            true
         );
+        Path successFile = resolvePath(workDir, request.args.get(3));
 
         touch(successFile);
         return Result.of(0, toolResult.output);
+    }
+
+    private static Result runTlcCheck(Request request, Path workDir) throws Exception {
+        if (request.args.size() < 4) {
+            return Result.failure("tlc_check expects a spec, cfg, log output, and module files");
+        }
+
+        return runTlc(
+            workDir,
+            resolvePath(workDir, request.args.get(0)),
+            resolvePath(workDir, request.args.get(1)),
+            resolvePath(workDir, request.args.get(2)),
+            collectModuleFiles(request.args, workDir, 3),
+            false
+        );
+    }
+
+    private static Result runTlc(
+        Path workDir,
+        Path spec,
+        Path cfg,
+        Path logFile,
+        List<Path> moduleFiles,
+        boolean simulate
+    ) throws Exception {
+        createParentDirectory(logFile);
+
+        Path scratchDir = Files.createTempDirectory(workDir, "rules_tla_tlc_");
+        try {
+            List<Path> stagedModules = stageModuleFiles(moduleFiles, scratchDir);
+            Path stagedSpec = scratchDir.resolve(spec.getFileName().toString());
+            if (!Files.exists(stagedSpec)) {
+                return Result.failure("Spec module was not staged for TLC: " + spec.getFileName());
+            }
+
+            Path stagedCfg = scratchDir.resolve(cfg.getFileName().toString());
+            Files.copy(cfg, stagedCfg, StandardCopyOption.REPLACE_EXISTING);
+
+            List<String> args = new ArrayList<>();
+            args.add("-config");
+            args.add(stagedCfg.toString());
+            if (simulate) {
+                args.add("-simulate");
+            }
+            args.add(stagedSpec.toString());
+            args.add("-userFile");
+            args.add(logFile.toString());
+
+            return runTool("tlc2.TLC", args, scratchDir);
+        } finally {
+            deleteRecursively(scratchDir);
+        }
     }
 
     private static Result runTool(String className, List<String> args, Path workDir) throws Exception {
@@ -223,6 +289,27 @@ final class Tla2ToolsWorker {
     private static void copyFile(Path source, Path destination) throws IOException {
         createParentDirectory(destination);
         Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    private static List<Path> collectModuleFiles(List<String> args, Path workDir, int startIndex) {
+        List<Path> moduleFiles = new ArrayList<>();
+        for (int i = startIndex; i < args.size(); i++) {
+            moduleFiles.add(resolvePath(workDir, args.get(i)));
+        }
+        return moduleFiles;
+    }
+
+    private static List<Path> stageModuleFiles(List<Path> moduleFiles, Path destinationDir) throws IOException {
+        List<Path> stagedFiles = new ArrayList<>(moduleFiles.size());
+        for (Path moduleFile : moduleFiles) {
+            Path stagedFile = destinationDir.resolve(moduleFile.getFileName().toString());
+            if (Files.exists(stagedFile) && !Files.isSameFile(moduleFile, stagedFile)) {
+                throw new IOException("Duplicate TLA module name detected: " + moduleFile.getFileName());
+            }
+            Files.copy(moduleFile, stagedFile, StandardCopyOption.REPLACE_EXISTING);
+            stagedFiles.add(stagedFile);
+        }
+        return stagedFiles;
     }
 
     private static void createParentDirectory(Path path) throws IOException {

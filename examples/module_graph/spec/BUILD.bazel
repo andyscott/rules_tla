@@ -1,0 +1,14 @@
+load("//tla:tla.bzl", "tla_library", "tlc_test")
+
+tla_library(
+    name = "spec",
+    srcs = ["CounterSpec.tla"],
+    deps = ["//examples/module_graph/common:helper"],
+)
+
+tlc_test(
+    name = "model_check",
+    cfg = "demo.cfg",
+    main_module = "CounterSpec",
+    spec = ":spec",
+)

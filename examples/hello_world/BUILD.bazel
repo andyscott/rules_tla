@@ -1,6 +1,13 @@
-load("//tla:tla.bzl", "tla_library")
+load("//tla:tla.bzl", "tla_library", "tlc_test")
 
 tla_library(
     name = "hello_world",
     srcs = ["hello_world.tla"],
+)
+
+tlc_test(
+    name = "model_check",
+    cfg = "demo.cfg",
+    main_module = "hello_world",
+    spec = ":hello_world",
 )

@@ -8,5 +8,7 @@ tla_library(
 tla_simulation(
     name = "spec",
     cfg = "demo.cfg",
+    main_module = "simple_bank_transfer",
     spec = ":simple_bank_transfer",
+    tags = ["manual"],
 )
