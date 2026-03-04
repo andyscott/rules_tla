@@ -1,0 +1,87 @@
+load("@crates//:defs.bzl", "aliases", "all_crate_deps")
+load("@rules_rs//rs:rust_library.bzl", "rust_library")
+load("@rules_rs//rs:rust_test.bzl", "rust_test")
+load("@rules_tla//tla:tla.bzl", "apalache_check", "apalache_generate_traces", "tla_library")
+
+_CARGO_PACKAGE = "rust_tla_connect/Cargo.toml"
+
+_DEPS = all_crate_deps(
+    package_name = _CARGO_PACKAGE,
+    normal = True,
+)
+
+_PROC_MACRO_DEPS = all_crate_deps(
+    package_name = _CARGO_PACKAGE,
+    proc_macro = True,
+)
+
+_ALIASES = aliases(package_name = _CARGO_PACKAGE)
+
+tla_library(
+    name = "counter_model",
+    srcs = ["CounterModel.tla"],
+)
+
+apalache_check(
+    name = "counter_model_check",
+    invs = ["CounterInBounds"],
+    length = 6,
+    main_module = "CounterModel",
+    spec = ":counter_model",
+)
+
+rust_library(
+    name = "rust_tla_connect_demo",
+    srcs = ["src/lib.rs"],
+    aliases = _ALIASES,
+    crate_name = "rust_tla_connect_demo",
+    edition = "2021",
+    proc_macro_deps = _PROC_MACRO_DEPS,
+    deps = _DEPS,
+)
+
+apalache_generate_traces(
+    name = "counter_model_traces",
+    inv = "TraceComplete",
+    length = 6,
+    main_module = "CounterModel",
+    max_traces = 1,
+    spec = ":counter_model",
+)
+
+rust_library(
+    name = "rules_tla_trace_corpus_support",
+    srcs = ["@rules_tla//tla/rust:trace_corpus_support.rs"],
+    aliases = _ALIASES,
+    crate_name = "rules_tla_trace_corpus_support",
+    crate_root = "@rules_tla//tla/rust:trace_corpus_support.rs",
+    edition = "2021",
+    proc_macro_deps = _PROC_MACRO_DEPS,
+    deps = _DEPS,
+)
+
+rust_test(
+    name = "trace_replay_test",
+    srcs = ["tests/trace_replay.rs"],
+    aliases = _ALIASES,
+    crate_name = "trace_replay_test",
+    crate_root = "tests/trace_replay.rs",
+    data = [":counter_model_traces"],
+    edition = "2021",
+    env = {
+        "TLA_TRACE_CORPUS": "$(rootpath :counter_model_traces)",
+    },
+    proc_macro_deps = _PROC_MACRO_DEPS,
+    deps = _DEPS + [
+        ":rules_tla_trace_corpus_support",
+        ":rust_tla_connect_demo",
+    ],
+)
+
+test_suite(
+    name = "rust_tla_connect_test_suite",
+    tests = [
+        ":counter_model_check",
+        ":trace_replay_test",
+    ],
+)

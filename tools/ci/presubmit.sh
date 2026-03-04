@@ -34,8 +34,10 @@ run_bazel test \
 
 (
   cd e2e
-  run_bazel test //...
-  run_bazel test \
+  ./bazelw test //...
+  ./bazelw test \
+    //rust_tla_connect:counter_model_check \
+    //rust_tla_connect:trace_replay_test \
     //smoke:build_smoke \
     //smoke:hello_model_check \
     --experimental_output_paths=strip
@@ -43,7 +45,7 @@ run_bazel test \
   negative_log="$(mktemp)"
   trap 'rm -f "$negative_log"' EXIT
 
-  if "${bazel_cmd[@]}" build //negative_pluscal:bad_spec_under_test >"$negative_log" 2>&1; then
+  if ./bazelw build //negative_pluscal:bad_spec_under_test >"$negative_log" 2>&1; then
     cat "$negative_log"
     echo "expected //negative_pluscal:bad_spec_under_test to fail" >&2
     exit 1

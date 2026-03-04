@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+if [[ -n "${BAZEL:-}" ]]; then
+  bazel_cmd=("$BAZEL")
+elif command -v bazelisk >/dev/null 2>&1; then
+  bazel_cmd=("bazelisk")
+else
+  bazel_cmd=("bazel")
+fi
+
+extra_args=()
+
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  developer_dir="${DEVELOPER_DIR:-}"
+
+  if [[ -z "$developer_dir" && -d "/Library/Developer/CommandLineTools" ]]; then
+    developer_dir="/Library/Developer/CommandLineTools"
+  fi
+
+  if [[ -z "$developer_dir" ]] && command -v xcode-select >/dev/null 2>&1; then
+    developer_dir="$(xcode-select -p 2>/dev/null || true)"
+  fi
+
+  if [[ -n "$developer_dir" ]]; then
+    extra_args+=(
+      "--action_env=DEVELOPER_DIR=$developer_dir"
+      "--host_action_env=DEVELOPER_DIR=$developer_dir"
+    )
+  fi
+fi
+
+if [[ "$#" -eq 0 ]]; then
+  exec "${bazel_cmd[@]}"
+fi
+
+startup_args=()
+bazel_commands=(
+  analyze-profile
+  aquery
+  build
+  canonicalize-flags
+  clean
+  config
+  cquery
+  coverage
+  dump
+  fetch
+  help
+  info
+  license
+  mobile-install
+  mod
+  print_action
+  query
+  run
+  shutdown
+  sync
+  test
+  version
+)
+
+is_bazel_command() {
+  local arg="$1"
+  local command
+  for command in "${bazel_commands[@]}"; do
+    if [[ "$arg" == "$command" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+while [[ "$#" -gt 0 ]]; do
+  if is_bazel_command "$1"; then
+    break
+  fi
+  startup_args+=("$1")
+  shift
+done
+
+if [[ "$#" -eq 0 ]]; then
+  exec "${bazel_cmd[@]}" "${startup_args[@]}"
+fi
+
+command="$1"
+shift
+
+exec "${bazel_cmd[@]}" "${startup_args[@]}" "$command" "${extra_args[@]}" "$@"
