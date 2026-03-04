@@ -8,6 +8,7 @@ hash2
 .bazel_cache
 /external-tools/
 target/
+.bazelrc.user
 
 !bazel-*.rc
 

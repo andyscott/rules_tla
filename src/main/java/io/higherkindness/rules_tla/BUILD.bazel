@@ -1,3 +1,5 @@
+load("@rules_java//java:defs.bzl", "java_binary")
+
 java_binary(
     name = "worker",
     srcs = [
@@ -6,7 +8,7 @@ java_binary(
     main_class = "io.higherkindness.rules_tla.Tla2ToolsWorker",
     visibility = ["//visibility:public"],
     deps = [
-        "//third_party/bazel/src/main/protobuf:worker_protocol_java_proto",
+        "//third_party/bazel/src/main/java/com/google/devtools/build/lib/worker:worker_protocol_java",
         "@tla2tools",
     ],
 )

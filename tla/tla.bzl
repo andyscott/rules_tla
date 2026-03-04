@@ -23,6 +23,14 @@ def _tla(ctx):
         input_manifests = input_manifests,
     )
 
+def _stage_input_file(ctx, file, stem):
+    staged = ctx.actions.declare_file("{}.{}".format(stem, file.basename))
+    ctx.actions.symlink(
+        output = staged,
+        target_file = file,
+    )
+    return staged
+
 TlaInfo = provider(
     doc = "Provides TLA files",
     fields = {
@@ -35,13 +43,9 @@ def _action_tla2sany_sany(ctx, tla, inputs):
     outputs = [success_file]
 
     args = ctx.actions.args()
-    args.add(ctx.genfiles_dir.path)
-    args.add(ctx.label.package)
-    args.add(ctx.label.name)
-    args.add(True)
-    args.add("tla2sany.SANY")
-    args.add("-S")
-    args.add_all([f.short_path for f in inputs])
+    args.add("sany")
+    args.add(success_file)
+    args.add_all(inputs)
     args.set_param_file_format("multiline")
     args.use_param_file("@%s", use_always = True)
 
@@ -73,12 +77,10 @@ def _action_pcal_trans(ctx, tla, file):
     outputs = [tla_file, cfg_file]
 
     args = ctx.actions.args()
-    args.add(ctx.genfiles_dir.path)
-    args.add(ctx.label.package)
-    args.add(ctx.label.name)
-    args.add(True)
-    args.add("pcal.trans")
+    args.add("translate")
     args.add(file)
+    args.add(tla_file)
+    args.add(cfg_file)
     args.set_param_file_format("multiline")
     args.use_param_file("@%s", use_always = True)
 
@@ -132,8 +134,8 @@ tla_library = rule(
     attrs = {
         "srcs": attr.label_list(allow_files = True),
         "_worker": attr.label(
-            cfg = "host",
-            default = "@io_higherkindness_rules_tla//src/main/java/io/higherkindness/rules_tla:worker",
+            cfg = "exec",
+            default = "//src/main/java/io/higherkindness/rules_tla:worker",
             executable = True,
         ),
     },
@@ -143,27 +145,22 @@ def _action_tlc2_TLC(ctx, tla, file, cfg):
     success_file = ctx.actions.declare_file("{}.tlc2.TLC.success".format(ctx.label.name))
 
     log_file = ctx.actions.declare_file("{}.log".format(ctx.label.name))
+    staged_cfg = _stage_input_file(ctx, cfg, "{}.cfg".format(ctx.label.name))
 
     outputs = [success_file, log_file]
 
     args = ctx.actions.args()
-    args.add(ctx.genfiles_dir.path)
-    args.add(ctx.label.package)
-    args.add(ctx.label.name)
-    args.add(False)
-    args.add("tlc2.TLC")
-    args.add("-config")
-    args.add(cfg)
-    args.add("-simulate")
+    args.add("tlc_simulation")
     args.add(file)
-    args.add("-userFile")
+    args.add(staged_cfg)
     args.add(log_file)
+    args.add(success_file)
     args.set_param_file_format("multiline")
     args.use_param_file("@%s", use_always = True)
 
     ctx.actions.run(
         mnemonic = "Tla2Tools",
-        inputs = [file, cfg],
+        inputs = [file, staged_cfg],
         outputs = outputs,
         executable = tla.worker.files_to_run.executable,
         input_manifests = tla.input_manifests,
@@ -182,9 +179,10 @@ def _action_tlc2_TLC(ctx, tla, file, cfg):
 
 def _tla_simulation_implementation(ctx):
     tla = _tla(ctx)
-    result = _action_tlc2_TLC(ctx, tla, ctx.attr.spec[TlaInfo].files.to_list()[0], ctx.file.cfg)
-
-    print(ctx.file.cfg.path)
+    spec_files = ctx.attr.spec[TlaInfo].files.to_list()
+    if len(spec_files) != 1:
+        fail("tla_simulation requires a spec with exactly one module file, got {}".format(len(spec_files)))
+    result = _action_tlc2_TLC(ctx, tla, spec_files[0], ctx.file.cfg)
 
     default_info = DefaultInfo(
         files = depset(result.outputs),
@@ -200,8 +198,8 @@ tla_simulation = rule(
         "spec": attr.label(providers = [TlaInfo]),
         "cfg": attr.label(allow_single_file = True),
         "_worker": attr.label(
-            cfg = "host",
-            default = "@io_higherkindness_rules_tla//src/main/java/io/higherkindness/rules_tla:worker",
+            cfg = "exec",
+            default = "//src/main/java/io/higherkindness/rules_tla:worker",
             executable = True,
         ),
     },
