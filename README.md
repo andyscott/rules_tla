@@ -225,6 +225,7 @@ The repo includes examples for the supported shapes:
 Useful commands:
 
 ```bash
+./tools/ci/presubmit.sh
 bazel test ...
 bazel build //examples/plain_module:plain_module
 bazel test //examples/hello_world:model_check
@@ -233,4 +234,11 @@ bazel test //examples/apalache_counter:bounded_check
 bazel test //examples/apalache_counter:temporal_check
 bazel test //examples/apalache_counter:simulation
 cd e2e && bazel test //...
+```
+
+For local formatting and file hygiene, install pre-commit and enable the hooks:
+
+```bash
+pre-commit install
+pre-commit run --all-files
 ```

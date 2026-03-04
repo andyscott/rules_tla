@@ -4,6 +4,9 @@ module(
 )
 
 bazel_dep(name = "bazel_skylib", version = "1.8.2")
+
+bazel_dep(name = "buildifier_prebuilt", version = "8.2.1", dev_dependency = True)
+
 bazel_dep(name = "rules_java", version = "9.0.3")
 
 tla = use_extension("//tla:extensions.bzl", "tla")
@@ -18,4 +21,5 @@ tla.apalache(
 use_repo(tla, "apalache", "protobuf_java", "tla2tools")
 
 register_toolchains("//tla:default_toolchain")
+
 register_toolchains("//tla:default_apalache_toolchain")

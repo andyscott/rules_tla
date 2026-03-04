@@ -130,7 +130,7 @@ public final class WorkerProtocol extends com.google.protobuf.GeneratedFile {
       if (ref instanceof java.lang.String) {
         return (java.lang.String) ref;
       } else {
-        com.google.protobuf.ByteString bs = 
+        com.google.protobuf.ByteString bs =
             (com.google.protobuf.ByteString) ref;
         java.lang.String s = bs.toStringUtf8();
         path_ = s;
@@ -153,7 +153,7 @@ public final class WorkerProtocol extends com.google.protobuf.GeneratedFile {
         getPathBytes() {
       java.lang.Object ref = path_;
       if (ref instanceof java.lang.String) {
-        com.google.protobuf.ByteString b = 
+        com.google.protobuf.ByteString b =
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
         path_ = b;
@@ -539,7 +539,7 @@ public final class WorkerProtocol extends com.google.protobuf.GeneratedFile {
           getPathBytes() {
         java.lang.Object ref = path_;
         if (ref instanceof String) {
-          com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString b =
               com.google.protobuf.ByteString.copyFromUtf8(
                   (java.lang.String) ref);
           path_ = b;
@@ -742,7 +742,7 @@ public final class WorkerProtocol extends com.google.protobuf.GeneratedFile {
      *
      * <code>repeated .blaze.worker.Input inputs = 2;</code>
      */
-    java.util.List<com.google.devtools.build.lib.worker.WorkerProtocol.Input> 
+    java.util.List<com.google.devtools.build.lib.worker.WorkerProtocol.Input>
         getInputsList();
     /**
      * <pre>
@@ -770,7 +770,7 @@ public final class WorkerProtocol extends com.google.protobuf.GeneratedFile {
      *
      * <code>repeated .blaze.worker.Input inputs = 2;</code>
      */
-    java.util.List<? extends com.google.devtools.build.lib.worker.WorkerProtocol.InputOrBuilder> 
+    java.util.List<? extends com.google.devtools.build.lib.worker.WorkerProtocol.InputOrBuilder>
         getInputsOrBuilderList();
     /**
      * <pre>
@@ -939,7 +939,7 @@ public final class WorkerProtocol extends com.google.protobuf.GeneratedFile {
      * <code>repeated .blaze.worker.Input inputs = 2;</code>
      */
     @java.lang.Override
-    public java.util.List<? extends com.google.devtools.build.lib.worker.WorkerProtocol.InputOrBuilder> 
+    public java.util.List<? extends com.google.devtools.build.lib.worker.WorkerProtocol.InputOrBuilder>
         getInputsOrBuilderList() {
       return inputs_;
     }
@@ -1043,7 +1043,7 @@ public final class WorkerProtocol extends com.google.protobuf.GeneratedFile {
       if (ref instanceof java.lang.String) {
         return (java.lang.String) ref;
       } else {
-        com.google.protobuf.ByteString bs = 
+        com.google.protobuf.ByteString bs =
             (com.google.protobuf.ByteString) ref;
         java.lang.String s = bs.toStringUtf8();
         sandboxDir_ = s;
@@ -1063,7 +1063,7 @@ public final class WorkerProtocol extends com.google.protobuf.GeneratedFile {
         getSandboxDirBytes() {
       java.lang.Object ref = sandboxDir_;
       if (ref instanceof java.lang.String) {
-        com.google.protobuf.ByteString b = 
+        com.google.protobuf.ByteString b =
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
         sandboxDir_ = b;
@@ -1448,7 +1448,7 @@ public final class WorkerProtocol extends com.google.protobuf.GeneratedFile {
               inputsBuilder_ = null;
               inputs_ = other.inputs_;
               bitField0_ = (bitField0_ & ~0x00000002);
-              inputsBuilder_ = 
+              inputsBuilder_ =
                 com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders ?
                    internalGetInputsFieldBuilder() : null;
             } else {
@@ -1933,7 +1933,7 @@ public final class WorkerProtocol extends com.google.protobuf.GeneratedFile {
        *
        * <code>repeated .blaze.worker.Input inputs = 2;</code>
        */
-      public java.util.List<? extends com.google.devtools.build.lib.worker.WorkerProtocol.InputOrBuilder> 
+      public java.util.List<? extends com.google.devtools.build.lib.worker.WorkerProtocol.InputOrBuilder>
            getInputsOrBuilderList() {
         if (inputsBuilder_ != null) {
           return inputsBuilder_.getMessageOrBuilderList();
@@ -1974,12 +1974,12 @@ public final class WorkerProtocol extends com.google.protobuf.GeneratedFile {
        *
        * <code>repeated .blaze.worker.Input inputs = 2;</code>
        */
-      public java.util.List<com.google.devtools.build.lib.worker.WorkerProtocol.Input.Builder> 
+      public java.util.List<com.google.devtools.build.lib.worker.WorkerProtocol.Input.Builder>
            getInputsBuilderList() {
         return internalGetInputsFieldBuilder().getBuilderList();
       }
       private com.google.protobuf.RepeatedFieldBuilder<
-          com.google.devtools.build.lib.worker.WorkerProtocol.Input, com.google.devtools.build.lib.worker.WorkerProtocol.Input.Builder, com.google.devtools.build.lib.worker.WorkerProtocol.InputOrBuilder> 
+          com.google.devtools.build.lib.worker.WorkerProtocol.Input, com.google.devtools.build.lib.worker.WorkerProtocol.Input.Builder, com.google.devtools.build.lib.worker.WorkerProtocol.InputOrBuilder>
           internalGetInputsFieldBuilder() {
         if (inputsBuilder_ == null) {
           inputsBuilder_ = new com.google.protobuf.RepeatedFieldBuilder<
@@ -2158,7 +2158,7 @@ public final class WorkerProtocol extends com.google.protobuf.GeneratedFile {
           getSandboxDirBytes() {
         java.lang.Object ref = sandboxDir_;
         if (ref instanceof String) {
-          com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString b =
               com.google.protobuf.ByteString.copyFromUtf8(
                   (java.lang.String) ref);
           sandboxDir_ = b;
@@ -2394,7 +2394,7 @@ public final class WorkerProtocol extends com.google.protobuf.GeneratedFile {
       if (ref instanceof java.lang.String) {
         return (java.lang.String) ref;
       } else {
-        com.google.protobuf.ByteString bs = 
+        com.google.protobuf.ByteString bs =
             (com.google.protobuf.ByteString) ref;
         java.lang.String s = bs.toStringUtf8();
         output_ = s;
@@ -2416,7 +2416,7 @@ public final class WorkerProtocol extends com.google.protobuf.GeneratedFile {
         getOutputBytes() {
       java.lang.Object ref = output_;
       if (ref instanceof java.lang.String) {
-        com.google.protobuf.ByteString b = 
+        com.google.protobuf.ByteString b =
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
         output_ = b;
@@ -2893,7 +2893,7 @@ public final class WorkerProtocol extends com.google.protobuf.GeneratedFile {
           getOutputBytes() {
         java.lang.Object ref = output_;
         if (ref instanceof String) {
-          com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString b =
               com.google.protobuf.ByteString.copyFromUtf8(
                   (java.lang.String) ref);
           output_ = b;
@@ -3099,17 +3099,17 @@ public final class WorkerProtocol extends com.google.protobuf.GeneratedFile {
 
   private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_blaze_worker_Input_descriptor;
-  private static final 
+  private static final
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_blaze_worker_Input_fieldAccessorTable;
   private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_blaze_worker_WorkRequest_descriptor;
-  private static final 
+  private static final
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_blaze_worker_WorkRequest_fieldAccessorTable;
   private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_blaze_worker_WorkResponse_descriptor;
-  private static final 
+  private static final
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_blaze_worker_WorkResponse_fieldAccessorTable;
 

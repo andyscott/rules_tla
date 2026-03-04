@@ -1,3 +1,5 @@
+"""Public Bazel rules for TLA+, PlusCal, TLC, and Apalache."""
+
 _PROPAGATABLE_TAGS = [
     "no-remote",
     "no-cache",

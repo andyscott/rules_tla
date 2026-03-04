@@ -1,3 +1,5 @@
+"""Analysis tests for public rules_tla error handling."""
+
 load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
 load("//tla:tla.bzl", "tla_library", "tlc_test")
 
@@ -22,6 +24,11 @@ duplicate_module_name_test = analysistest.make(
 )
 
 def analysis_test_suite(name):
+    """Defines the analysis-test suite for public rule validation failures.
+
+    Args:
+      name: Name of the test suite target to create.
+    """
     tla_library(
         name = "single_module_spec_under_test",
         srcs = ["SingleModule.tla"],
